@@ -9,19 +9,25 @@ from src.models import DocumentChunk, RetrievalResult
 
 
 class QdrantVectorStore:
-    """Vector database wrapper using Qdrant in local embedded file mode."""
+    """Vector database wrapper using Qdrant supporting both local embedded and cloud modes."""
 
     def __init__(
         self,
-        storage_path: str = "data/qdrant_storage",
+        storage_path: Optional[str] = "data/qdrant_storage",
         collection_name: str = "technical_documents",
-        vector_size: int = 384
+        vector_size: int = 384,
+        url: Optional[str] = None,
+        api_key: Optional[str] = None
     ):
         self.storage_path = storage_path
         self.collection_name = collection_name
         self.vector_size = vector_size
+        self.url = url
+        self.api_key = api_key
 
-        if storage_path == ":memory:":
+        if url:
+            self.client = QdrantClient(url=url, api_key=api_key)
+        elif storage_path == ":memory:":
             self.client = QdrantClient(location=":memory:")
         else:
             Path(storage_path).mkdir(parents=True, exist_ok=True)

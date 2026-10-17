@@ -22,7 +22,9 @@ async def lifespan(app: FastAPI):
     app.state.embedding_model = EmbeddingModel(settings.embedding_model)
     app.state.vector_store = QdrantVectorStore(
         storage_path=settings.qdrant_path,
-        collection_name=settings.qdrant_collection
+        collection_name=settings.qdrant_collection,
+        url=settings.qdrant_url if settings.qdrant_url else None,
+        api_key=settings.qdrant_api_key if settings.qdrant_api_key else None
     )
 
     # 3. Retriever initialization

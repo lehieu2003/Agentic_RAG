@@ -29,9 +29,15 @@ def main():
     print("=" * 60)
 
     # 1. Initialize components
+    from src.config import settings
     ocr_engine = OcrEngine()
-    embedder = EmbeddingModel("all-MiniLM-L6-v2")
-    store = QdrantVectorStore(storage_path="data/qdrant_storage", collection_name="benchmark_docs")
+    embedder = EmbeddingModel(settings.embedding_model)
+    store = QdrantVectorStore(
+        storage_path=settings.qdrant_path,
+        collection_name="benchmark_docs",
+        url=settings.qdrant_url if settings.qdrant_url else None,
+        api_key=settings.qdrant_api_key if settings.qdrant_api_key else None
+    )
     retriever = LocalRetriever(embedder, store)
     generator = RAGGenerator(provider="mock", min_relevance_score=0.55)
 

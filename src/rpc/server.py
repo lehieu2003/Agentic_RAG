@@ -63,7 +63,9 @@ if __name__ == "__main__":
     embed_model = EmbeddingModel(settings.embedding_model)
     store = QdrantVectorStore(
         storage_path=settings.qdrant_path,
-        collection_name=settings.qdrant_collection
+        collection_name=settings.qdrant_collection,
+        url=settings.qdrant_url if settings.qdrant_url else None,
+        api_key=settings.qdrant_api_key if settings.qdrant_api_key else None
     )
     retriever = LocalRetriever(embedding_model=embed_model, vector_store=store)
 

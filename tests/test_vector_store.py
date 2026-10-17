@@ -40,3 +40,26 @@ def test_embed_and_search(temp_qdrant_store):
     assert "Van an toàn" in results[0].chunk.text
     assert results[0].score > 0.0
 
+
+def test_qdrant_cloud_initialization():
+    from unittest.mock import MagicMock, patch
+
+    with patch("src.vector_store.qdrant_store.QdrantClient") as mock_client_cls:
+        mock_instance = MagicMock()
+        mock_client_cls.return_value = mock_instance
+        mock_instance.get_collections.return_value.collections = []
+
+        store = QdrantVectorStore(
+            url="https://xyz-example.qdrant.io:6333",
+            api_key="secret-api-key",
+            collection_name="cloud_collection"
+        )
+
+        mock_client_cls.assert_called_once_with(
+            url="https://xyz-example.qdrant.io:6333",
+            api_key="secret-api-key"
+        )
+        assert store.url == "https://xyz-example.qdrant.io:6333"
+        assert store.api_key == "secret-api-key"
+
+

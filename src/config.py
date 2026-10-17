@@ -10,6 +10,8 @@ class Settings(BaseSettings):
     app_name: str = "Document Q&A Assistant"
     qdrant_path: str = "data/qdrant_storage"
     qdrant_collection: str = "technical_documents"
+    qdrant_url: str = ""
+    qdrant_api_key: str = ""
     embedding_model: str = "all-MiniLM-L6-v2"
     llm_provider: Literal["gemini", "openai", "mock"] = "gemini"
     gemini_api_key: str = ""
