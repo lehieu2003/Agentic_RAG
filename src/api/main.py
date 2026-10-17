@@ -88,3 +88,11 @@ app.add_middleware(
 )
 
 app.include_router(router)
+
+
+@app.get("/", include_in_schema=False)
+def root():
+    """Tự động chuyển hướng từ trang chủ sang Swagger UI."""
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(url="/docs")
+

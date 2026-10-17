@@ -13,7 +13,11 @@ from src.models import QARequest, QAResponse
 router = APIRouter(prefix="/api/v1")
 
 
-@router.get("/health")
+@router.get(
+    "/health",
+    tags=["Hệ thống (System)"],
+    summary="Kiểm tra trạng thái hoạt động của hệ thống"
+)
 def health(request: Request) -> Dict[str, Any]:
     """Health check endpoint returning system status."""
     return {
@@ -23,12 +27,21 @@ def health(request: Request) -> Dict[str, Any]:
     }
 
 
-@router.post("/upload")
+@router.post(
+    "/upload",
+    tags=["Tải lên tài liệu (Ingestion)"],
+    summary="Tải lên tài liệu PDF để bóc tách text/OCR và đánh chỉ mục vector"
+)
 async def upload_document(
     request: Request,
     file: UploadFile = File(...)
 ) -> Dict[str, Any]:
-    """Upload a PDF document, extract text/OCR, chunk and index into vector store."""
+    """Tải lên tài liệu PDF kỹ thuật. Hệ thống sẽ:
+    1. Trích xuất text kỹ thuật số qua PyMuPDF.
+    2. Tự động nhận diện trang scan/ảnh và kích hoạt RapidOCR fallback.
+    3. Phân đoạn ngữ nghĩa (chunking) bảo toàn số trang.
+    4. Sinh embedding và lưu trữ vào Qdrant Cloud.
+    """
     if not file.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF documents are supported.")
 
@@ -68,12 +81,21 @@ async def upload_document(
         Path(tmp_path).unlink(missing_ok=True)
 
 
-@router.post("/query", response_model=QAResponse)
+@router.post(
+    "/query",
+    response_model=QAResponse,
+    tags=["Hỏi đáp tài liệu (Q&A)"],
+    summary="Đặt câu hỏi kỹ thuật về tài liệu đã đánh chỉ mục"
+)
 def query_assistant(
     request: Request,
     qa_request: QARequest
 ) -> QAResponse:
-    """Ask a question about the indexed technical documents."""
+    """Truy vấn trợ lý hỏi đáp kỹ thuật. Hệ thống sẽ:
+    1. Tìm kiếm top-k đoạn tài liệu liên quan nhất trên Qdrant bằng vector embedding.
+    2. Gửi ngữ cảnh tới LLM (Google Gemini / OpenAI) để tổng hợp câu trả lời kèm trích dẫn nguồn: `[Tài liệu: ..., Trang ...]`.
+    3. Tự động từ chối (Abstention) nếu câu hỏi không có căn cứ trong tài liệu.
+    """
     retriever = getattr(request.app.state, "retriever", None)
     generator = getattr(request.app.state, "generator", None)
 

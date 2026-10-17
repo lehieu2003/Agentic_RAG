@@ -31,8 +31,29 @@ class Citation(BaseModel):
 class QARequest(BaseModel):
     """Incoming user question request."""
 
-    question: str
-    top_k: int = Field(default=5, ge=1, le=20)
+    question: str = Field(
+        ...,
+        description="Câu hỏi bằng ngôn ngữ tự nhiên về tài liệu kỹ thuật",
+        examples=["Nhiệt độ tối đa cho phép của thân bơm là bao nhiêu độ?"]
+    )
+    top_k: int = Field(
+        default=5,
+        ge=1,
+        le=20,
+        description="Số lượng đoạn văn bản liên quan nhất cần truy xuất từ Qdrant",
+        examples=[3]
+    )
+
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "question": "Nhiệt độ tối đa cho phép của thân bơm là bao nhiêu độ?",
+                    "top_k": 3
+                }
+            ]
+        }
+    }
 
 
 class QAResponse(BaseModel):
