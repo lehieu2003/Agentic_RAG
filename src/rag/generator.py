@@ -24,7 +24,7 @@ class RAGGenerator:
     ):
         self.llm_client = llm_client
         self.provider = provider
-        self.model_name = model_name or ("gemini-2.5-flash" if provider == "gemini" else "gpt-4o-mini")
+        self.model_name = model_name or ("gemini-3.8-flash" if provider == "gemini" else "gpt-4o-mini")
         self.min_relevance_score = min_relevance_score
 
     def parse_llm_output(
