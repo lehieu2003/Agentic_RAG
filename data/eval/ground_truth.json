@@ -1,0 +1,122 @@
+[
+  {
+    "id": "q1",
+    "question": "Những nguyên nhân nào khiến áp suất đầu ra của máy bơm bị giảm?",
+    "expected_doc": "pump_maintenance_guide.pdf",
+    "expected_pages": [1],
+    "ground_truth_answer": "Áp suất đầu ra giảm do rò rỉ van xả, cánh bơm bị mòn hoặc đường ống hút bị tắc nghẽn.",
+    "should_abstain": false
+  },
+  {
+    "id": "q2",
+    "question": "Quy trình kiểm tra và bảo trì định kỳ cánh bơm diễn ra như thế nào?",
+    "expected_doc": "pump_maintenance_guide.pdf",
+    "expected_pages": [1],
+    "ground_truth_answer": "Kiểm tra độ mòn cơ học, vệ sinh cặn bẩn và siết chặt bu lông cố định định kỳ 6 tháng một lần.",
+    "should_abstain": false
+  },
+  {
+    "id": "q3",
+    "question": "Áp suất vận hành tiêu chuẩn của hệ thống máy bơm là bao nhiêu bar?",
+    "expected_doc": "pump_maintenance_guide.pdf",
+    "expected_pages": [2],
+    "ground_truth_answer": "Áp suất vận hành tiêu chuẩn là 6.5 bar đến 8.0 bar.",
+    "should_abstain": false
+  },
+  {
+    "id": "q4",
+    "question": "Khi nào van an toàn tự động mở để xả áp suất?",
+    "expected_doc": "pump_maintenance_guide.pdf",
+    "expected_pages": [2],
+    "ground_truth_answer": "Van an toàn tự động kích hoạt xả áp khi áp lực đường ống vượt quá ngưỡng 10 bar.",
+    "should_abstain": false
+  },
+  {
+    "id": "q5",
+    "question": "Loại dầu bôi trơn nào được khuyến nghị cho ổ bi và chu kỳ thay là bao lâu?",
+    "expected_doc": "pump_maintenance_guide.pdf",
+    "expected_pages": [2],
+    "ground_truth_answer": "Sử dụng dầu bôi trơn công nghiệp ISO VG 46, chu kỳ thay thế là 3 tháng hoặc sau mỗi 1000 giờ vận hành.",
+    "should_abstain": false
+  },
+  {
+    "id": "q6",
+    "question": "Nhiệt độ tối đa cho phép của thân bơm trong quá trình hoạt động liên tục là bao nhiêu?",
+    "expected_doc": "pump_maintenance_guide.pdf",
+    "expected_pages": [3],
+    "ground_truth_answer": "Nhiệt độ tối đa cho phép của thân bơm là 85 độ C.",
+    "should_abstain": false
+  },
+  {
+    "id": "q7",
+    "question": "Dấu hiệu nào cho thấy phớt cơ khí của máy bơm bị hỏng cần thay thế ngay?",
+    "expected_doc": "pump_maintenance_guide.pdf",
+    "expected_pages": [3],
+    "ground_truth_answer": "Dấu hiệu là có hiện tượng rò rỉ chất lỏng tại trục bơm vượt quá 5 giọt/phút hoặc có tiếng kêu bất thường.",
+    "should_abstain": false
+  },
+  {
+    "id": "q8",
+    "question": "Các bước xử lý khẩn cấp khi động cơ máy bơm phát sinh hiện tượng quá nhiệt?",
+    "expected_doc": "pump_maintenance_guide.pdf",
+    "expected_pages": [3],
+    "ground_truth_answer": "Ngắt nguồn điện ngay lập tức, đóng van đầu vào và kiểm tra hệ thống làm mát cùng tải động cơ.",
+    "should_abstain": false
+  },
+  {
+    "id": "q9",
+    "question": "Điện áp danh định và tần số hoạt động của động cơ máy bơm là bao nhiêu?",
+    "expected_doc": "pump_maintenance_guide.pdf",
+    "expected_pages": [4],
+    "ground_truth_answer": "Điện áp danh định 380V 3 pha, tần số 50Hz.",
+    "should_abstain": false
+  },
+  {
+    "id": "q10",
+    "question": "Thông số dòng điện định mức tối đa của động cơ máy bơm là bao nhiêu ampe?",
+    "expected_doc": "pump_maintenance_guide.pdf",
+    "expected_pages": [4],
+    "ground_truth_answer": "Dòng điện định mức tối đa là 22A.",
+    "should_abstain": false
+  },
+  {
+    "id": "q11",
+    "question": "Cảnh báo an toàn nào được ghi chú trên sơ đồ mạch điện điều khiển?",
+    "expected_doc": "scanned_circuit_diagram.pdf",
+    "expected_pages": [1],
+    "ground_truth_answer": "Cảnh báo áp suất cao và nguy hiểm điện áp 380V ngắt cầu dao trước khi sửa chữa.",
+    "should_abstain": false
+  },
+  {
+    "id": "q12",
+    "question": "Rơ le nhiệt bảo vệ mạch điện điều khiển được cài đặt ở giá trị nào?",
+    "expected_doc": "scanned_circuit_diagram.pdf",
+    "expected_pages": [1],
+    "ground_truth_answer": "Rơ le nhiệt được cài đặt ở mức 24A.",
+    "should_abstain": false
+  },
+  {
+    "id": "q_oos_1",
+    "question": "Công thức hóa học của nước và cách điều chế axit sunfuric?",
+    "expected_doc": null,
+    "expected_pages": [],
+    "ground_truth_answer": "Abstain",
+    "should_abstain": true
+  },
+  {
+    "id": "q_oos_2",
+    "question": "Hướng dẫn cài đặt hệ điều hành Ubuntu 24.04 trên máy chủ?",
+    "expected_doc": null,
+    "expected_pages": [],
+    "ground_truth_answer": "Abstain",
+    "should_abstain": true
+  },
+  {
+    "id": "q_oos_3",
+    "question": "Giá cổ phiếu của tập đoàn Apple vào ngày hôm nay là bao nhiêu?",
+    "expected_doc": null,
+    "expected_pages": [],
+    "ground_truth_answer": "Abstain",
+    "should_abstain": true
+  }
+]
