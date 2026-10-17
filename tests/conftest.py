@@ -6,3 +6,8 @@ import os
 os.environ.setdefault("HF_HUB_OFFLINE", "1")
 os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 
+# Ensure unit tests use local embedded / in-memory mode rather than hitting external cloud
+os.environ["QDRANT_URL"] = ""
+os.environ["QDRANT_API_KEY"] = ""
+
+

@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     grpc_port: int = 50051
     grpc_host: str = "localhost"
     retrieval_mode: Literal["local", "grpc"] = "local"
+    min_relevance_score: float = 0.45
 
     model_config = SettingsConfigDict(
         env_file=".env",

@@ -39,7 +39,7 @@ def main():
         api_key=settings.qdrant_api_key if settings.qdrant_api_key else None
     )
     retriever = LocalRetriever(embedder, store)
-    generator = RAGGenerator(provider="mock", min_relevance_score=0.55)
+    generator = RAGGenerator(provider="mock", min_relevance_score=settings.min_relevance_score)
 
     # 2. Ingest sample documents
     sample_files = [

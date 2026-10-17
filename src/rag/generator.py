@@ -20,7 +20,7 @@ class RAGGenerator:
         llm_client: Optional[Any] = None,
         provider: str = "gemini",
         model_name: Optional[str] = None,
-        min_relevance_score: float = 0.55
+        min_relevance_score: float = 0.45
     ):
         self.llm_client = llm_client
         self.provider = provider

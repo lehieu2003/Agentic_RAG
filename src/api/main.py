@@ -57,7 +57,8 @@ async def lifespan(app: FastAPI):
 
     app.state.generator = RAGGenerator(
         llm_client=llm_client,
-        provider=settings.llm_provider
+        provider=settings.llm_provider,
+        min_relevance_score=settings.min_relevance_score
     )
 
     try:
