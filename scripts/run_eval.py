@@ -1,6 +1,18 @@
 """Standalone script to index sample documents and run evaluation benchmark."""
 
+import os
+import sys
 from pathlib import Path
+
+# Set offline mode default for huggingface hub if not explicitly overridden
+os.environ.setdefault("HF_HUB_OFFLINE", "1")
+os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
+
+# Ensure root package is discoverable when script is run directly
+_repo_root = str(Path(__file__).resolve().parent.parent)
+if _repo_root not in sys.path:
+    sys.path.insert(0, _repo_root)
+
 from src.eval.runner import run_benchmark
 from src.ingestion.chunker import chunk_document
 from src.ingestion.ocr_engine import OcrEngine
@@ -21,7 +33,7 @@ def main():
     embedder = EmbeddingModel("all-MiniLM-L6-v2")
     store = QdrantVectorStore(storage_path="data/qdrant_storage", collection_name="benchmark_docs")
     retriever = LocalRetriever(embedder, store)
-    generator = RAGGenerator(provider="mock")
+    generator = RAGGenerator(provider="mock", min_relevance_score=0.55)
 
     # 2. Ingest sample documents
     sample_files = [
@@ -58,4 +70,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

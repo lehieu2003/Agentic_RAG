@@ -48,3 +48,32 @@ def start_grpc_server(retriever: BaseRetriever, port: int = 50051) -> grpc.Serve
     server.add_insecure_port(f"[::]:{port}")
     server.start()
     return server
+
+
+if __name__ == "__main__":
+    import logging
+    from src.config import settings
+    from src.retrieval.local import LocalRetriever
+    from src.vector_store.embedding import EmbeddingModel
+    from src.vector_store.qdrant_store import QdrantVectorStore
+
+    logging.basicConfig(level=logging.INFO)
+    logger = logging.getLogger("rpc_server")
+
+    embed_model = EmbeddingModel(settings.embedding_model)
+    store = QdrantVectorStore(
+        storage_path=settings.qdrant_path,
+        collection_name=settings.qdrant_collection
+    )
+    retriever = LocalRetriever(embedding_model=embed_model, vector_store=store)
+
+    server = start_grpc_server(retriever=retriever, port=settings.grpc_port)
+    logger.info("Retrieval gRPC service listening on port %d", settings.grpc_port)
+    try:
+        server.wait_for_termination()
+    except KeyboardInterrupt:
+        logger.info("Stopping gRPC service...")
+        server.stop(0)
+        store.close()
+
+

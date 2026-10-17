@@ -3,6 +3,7 @@ from typing import List
 from src.models import DocumentChunk, RetrievalResult
 from src.eval.metrics import calculate_recall_at_k, evaluate_abstention
 from src.eval.runner import run_benchmark
+from src.rag.generator import RAGGenerator
 from src.retrieval.base import BaseRetriever
 
 class MockRetriever(BaseRetriever):
@@ -29,10 +30,18 @@ def test_abstention_metric():
     assert evaluate_abstention(should_abstain=True, actually_abstained=True) is True
     assert evaluate_abstention(should_abstain=False, actually_abstained=True) is False
 
-def test_run_benchmark():
+def test_run_benchmark_without_generator():
     retriever = MockRetriever()
     report = run_benchmark(retriever, ground_truth_file="data/eval/ground_truth.json", k_values=[1, 3])
     assert "recall@1" in report
     assert "recall@3" in report
+    assert report["abstention_accuracy"] is None
     assert "markdown_report" in report
     assert report["total_queries"] == 15
+
+def test_run_benchmark_with_generator():
+    retriever = MockRetriever()
+    generator = RAGGenerator(provider="mock")
+    report = run_benchmark(retriever, ground_truth_file="data/eval/ground_truth.json", k_values=[1, 3], rag_generator=generator)
+    assert report["abstention_accuracy"] is not None
+    assert "Abstention Accuracy" in report["markdown_report"]

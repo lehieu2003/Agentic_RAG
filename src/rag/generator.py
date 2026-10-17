@@ -1,4 +1,4 @@
-"""LLM Answer Generator with citation extraction and abstention enforcement."""
+"""LLM Answer Generator with citation extraction, citation grounding, and abstention enforcement."""
 
 import os
 import re
@@ -20,7 +20,7 @@ class RAGGenerator:
         llm_client: Optional[Any] = None,
         provider: str = "gemini",
         model_name: Optional[str] = None,
-        min_relevance_score: float = 0.50
+        min_relevance_score: float = 0.55
     ):
         self.llm_client = llm_client
         self.provider = provider
@@ -32,10 +32,14 @@ class RAGGenerator:
         raw_output: str,
         retrieved_chunks: List[RetrievalResult]
     ) -> QAResponse:
-        """Parse raw LLM output into structured QAResponse, extracting citations and abstention status."""
+        """Parse raw LLM output into structured QAResponse, extracting citations and abstention status.
+
+        Enforces grounding: citations must exist in retrieved_chunks, otherwise they are discarded.
+        If an answer has no grounded citations, it is flagged as abstained to prevent hallucination.
+        """
         raw_clean = raw_output.strip()
 
-        # Check for abstention
+        # Check for explicit abstention
         if ABSTAIN_PHRASE.lower() in raw_clean.lower():
             return QAResponse(
                 answer=ABSTAIN_PHRASE,
@@ -43,6 +47,12 @@ class RAGGenerator:
                 abstained=True,
                 retrieved_chunks=retrieved_chunks
             )
+
+        # Build set of valid sources from retrieved chunks
+        valid_sources = {
+            (r.chunk.doc_name.strip().lower(), r.chunk.page_number)
+            for r in retrieved_chunks
+        }
 
         # Extract citations: [Tài liệu: doc.pdf, Trang 12]
         matches = self.CITATION_PATTERN.findall(raw_clean)
@@ -52,10 +62,21 @@ class RAGGenerator:
         for doc_name, page_str in matches:
             doc_name_clean = doc_name.strip()
             page_num = int(page_str.strip())
-            key = (doc_name_clean, page_num)
-            if key not in seen_citations:
-                seen_citations.add(key)
+            source_key = (doc_name_clean.lower(), page_num)
+
+            # Grounding check: only accept citation if present in retrieved chunks
+            if source_key in valid_sources and source_key not in seen_citations:
+                seen_citations.add(source_key)
                 citations.append(Citation(doc_name=doc_name_clean, page_number=page_num))
+
+        # Grounding guardrail: If retrieved chunks exist but answer provides zero valid grounded citations
+        if retrieved_chunks and not citations:
+            return QAResponse(
+                answer=ABSTAIN_PHRASE,
+                citations=[],
+                abstained=True,
+                retrieved_chunks=retrieved_chunks
+            )
 
         return QAResponse(
             answer=raw_clean,

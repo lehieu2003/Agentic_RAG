@@ -80,7 +80,6 @@ def run_benchmark(
         abstain_results = []
         for oos in out_of_scope_items:
             retrieved = retriever.search(oos["question"], top_k=5)
-            # Filter low relevance if needed or let generator decide
             resp = rag_generator.generate_answer(oos["question"], retrieved)
             passed = evaluate_abstention(should_abstain=True, actually_abstained=resp.abstained)
             abstain_results.append(1.0 if passed else 0.0)
@@ -89,7 +88,7 @@ def run_benchmark(
             sum(abstain_results) / len(abstain_results), 4
         )
     else:
-        aggregate_metrics["abstention_accuracy"] = 1.0
+        aggregate_metrics["abstention_accuracy"] = None
 
     aggregate_metrics["total_queries"] = len(dataset)
     aggregate_metrics["in_scope_queries"] = total_in_scope
@@ -111,7 +110,7 @@ def run_benchmark(
         score_pct = f"{aggregate_metrics[f'recall@{k}'] * 100:.1f}%"
         lines.append(f"| **Recall@{k}** | {score_pct} | ≥ 70% |")
 
-    if "abstention_accuracy" in aggregate_metrics:
+    if aggregate_metrics["abstention_accuracy"] is not None:
         abs_pct = f"{aggregate_metrics['abstention_accuracy'] * 100:.1f}%"
         lines.append(f"| **Abstention Accuracy** | {abs_pct} | ≥ 90% |")
 

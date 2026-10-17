@@ -5,3 +5,5 @@ __pycache__/
 *.egg-info/
 data/qdrant_storage/
 .env
+.DS_Store
+

@@ -2,8 +2,10 @@
 import io
 import pymupdf
 import pytest
+from unittest.mock import MagicMock
 from fastapi.testclient import TestClient
 from src.api.main import app
+from src.retrieval.base import BaseRetriever
 
 @pytest.fixture(scope="module")
 def client():
@@ -39,3 +41,40 @@ def test_query_endpoint_structure(client):
     assert "answer" in data
     assert "citations" in data
     assert "abstained" in data
+
+def test_upload_when_indexing_unsupported_returns_501(client):
+    # Mock retriever where index_chunks raises NotImplementedError (like GrpcRetriever)
+    mock_retriever = MagicMock(spec=BaseRetriever)
+    mock_retriever.index_chunks.side_effect = NotImplementedError("Indexing not supported.")
+    original_retriever = app.state.retriever
+    app.state.retriever = mock_retriever
+
+    try:
+        doc = pymupdf.open()
+        page = doc.new_page()
+        page.insert_text((50, 72), "Sample text for indexing check.")
+        pdf_bytes = doc.tobytes()
+        doc.close()
+
+        response = client.post(
+            "/api/v1/upload",
+            files={"file": ("test_unsupported.pdf", io.BytesIO(pdf_bytes), "application/pdf")}
+        )
+        assert response.status_code == 501
+        assert "not supported" in response.json()["detail"].lower()
+    finally:
+        app.state.retriever = original_retriever
+
+def test_query_returns_503_on_grpc_disconnection(client):
+    # Focus #5 requirement: When gRPC service is unavailable, /query returns HTTP 503
+    mock_retriever = MagicMock(spec=BaseRetriever)
+    mock_retriever.search.side_effect = ConnectionError("Failed to communicate with gRPC RetrievalService")
+    original_retriever = app.state.retriever
+    app.state.retriever = mock_retriever
+
+    try:
+        response = client.post("/api/v1/query", json={"question": "Test disconnected gRPC", "top_k": 3})
+        assert response.status_code == 503
+        assert "Retrieval failure" in response.json()["detail"]
+    finally:
+        app.state.retriever = original_retriever

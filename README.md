@@ -165,3 +165,4 @@ Kết quả đo lường thực tế trên bộ dữ liệu kiểm thử `data/e
 | **Recall@5** | **100.0%** | ≥ 70% | Hoàn hảo (12/12 câu in-scope) |
 | **Recall@10** | **100.0%** | ≥ 70% | Hoàn hảo |
 | **Abstention Accuracy** | **100.0%** (Live LLM) | ≥ 90% | Chống hallucination triệt để |
+

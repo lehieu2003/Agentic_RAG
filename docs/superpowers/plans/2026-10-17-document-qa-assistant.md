@@ -802,3 +802,4 @@ Expected: PASS
 GIT_CONFIG_GLOBAL=/dev/null git add sample_docs/ README.md tests/test_e2e.py
 GIT_CONFIG_GLOBAL=/dev/null git commit -m "docs: add sample technical documents, e2e tests and README"
 ```
+

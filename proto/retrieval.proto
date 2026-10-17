@@ -22,3 +22,4 @@ message Chunk {
 message SearchResponse {
   repeated Chunk chunks = 1;
 }
+

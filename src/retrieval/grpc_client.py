@@ -50,3 +50,4 @@ class GrpcRetriever(BaseRetriever):
         """Close gRPC channel connection."""
         if hasattr(self, "channel") and self.channel is not None:
             self.channel.close()
+

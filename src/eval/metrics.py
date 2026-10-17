@@ -47,3 +47,4 @@ def evaluate_abstention(should_abstain: bool, actually_abstained: bool) -> bool:
         True if the system's behavior matched ground truth, False otherwise.
     """
     return should_abstain == actually_abstained
+

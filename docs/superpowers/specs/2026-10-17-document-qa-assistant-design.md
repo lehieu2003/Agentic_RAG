@@ -235,3 +235,4 @@ Hệ thống được thiết kế theo kiến trúc Hexagonal / Clean Architect
 - **Giai đoạn 3**: RAG Pipeline (FastAPI, LLM API, Prompt trích dẫn & Abstention).
 - **Giai đoạn 4**: Bộ dữ liệu Ground Truth mẫu và Runner đánh giá Recall@K.
 - **Giai đoạn 5**: Khai báo Protobuf, build code gRPC, triển khai gRPC Retrieval Server & GrpcRetriever adapter.
+

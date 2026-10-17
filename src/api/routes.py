@@ -50,7 +50,13 @@ async def upload_document(
             p["doc_name"] = file.filename
 
         chunks = chunk_document(pages)
-        indexed_count = retriever.index_chunks(chunks)
+        try:
+            indexed_count = retriever.index_chunks(chunks)
+        except NotImplementedError:
+            raise HTTPException(
+                status_code=501,
+                detail="Document indexing is not supported by the active retrieval backend (e.g. gRPC mode)."
+            )
 
         return {
             "filename": file.filename,
@@ -81,4 +87,3 @@ def query_assistant(
 
     response = generator.generate_answer(qa_request.question, chunks)
     return response
-
