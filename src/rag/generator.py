@@ -19,11 +19,13 @@ class RAGGenerator:
         self,
         llm_client: Optional[Any] = None,
         provider: str = "gemini",
-        model_name: Optional[str] = None
+        model_name: Optional[str] = None,
+        min_relevance_score: float = 0.50
     ):
         self.llm_client = llm_client
         self.provider = provider
         self.model_name = model_name or ("gemini-2.5-flash" if provider == "gemini" else "gpt-4o-mini")
+        self.min_relevance_score = min_relevance_score
 
     def parse_llm_output(
         self,
@@ -76,23 +78,23 @@ class RAGGenerator:
         Returns:
             QAResponse model.
         """
-        # Guardrail: If no chunks retrieved, abstain immediately without calling LLM
-        if not context_chunks:
+        # Guardrail 1: Empty chunks or top result below minimum relevance score
+        relevant_chunks = [c for c in context_chunks if c.score >= self.min_relevance_score]
+        if not relevant_chunks:
             return QAResponse(
                 answer=ABSTAIN_PHRASE,
                 citations=[],
                 abstained=True,
-                retrieved_chunks=[]
+                retrieved_chunks=context_chunks
             )
 
-        prompt = build_rag_prompt(question, context_chunks)
+        prompt = build_rag_prompt(question, relevant_chunks)
 
         # Mock / Test mode when client is None
         if self.llm_client is None:
-            # Check if any chunk text has relevant keywords
-            first_chunk = context_chunks[0].chunk
+            first_chunk = relevant_chunks[0].chunk
             raw_output = f"Theo tài liệu kỹ thuật, {first_chunk.text} [Tài liệu: {first_chunk.doc_name}, Trang {first_chunk.page_number}]."
-            return self.parse_llm_output(raw_output, context_chunks)
+            return self.parse_llm_output(raw_output, relevant_chunks)
 
         # Live LLM API invocation
         try:
@@ -114,4 +116,4 @@ class RAGGenerator:
         except Exception as e:
             raw_text = f"{ABSTAIN_PHRASE} (Lỗi kết nối LLM: {str(e)})"
 
-        return self.parse_llm_output(raw_text, context_chunks)
+        return self.parse_llm_output(raw_text, relevant_chunks)
