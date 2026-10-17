@@ -1,6 +1,6 @@
 # Document Q&A Assistant Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Xây dựng hệ thống Document Q&A Assistant chuyên nghiệp cho tài liệu kỹ thuật PDF, bao gồm pipeline OCR, chunking bảo toàn metadata số trang, tìm kiếm vector trên Qdrant, RAG có trích dẫn nguồn và cơ chế từ chối (Abstention), đo lường Recall@K trên tập Ground Truth, và tách module Retrieval thành microservice gRPC.
 
@@ -51,7 +51,7 @@
   - `src.models.Citation`: `doc_name: str`, `page_number: int`.
   - `src.models.QAResponse`: `answer: str`, `citations: list[Citation]`, `abstained: bool`, `retrieved_chunks: list[RetrievalResult]`.
 
-- [ ] **Step 1: Write the failing test for models and configuration**
+- [x] **Step 1: Write the failing test for models and configuration**
 
 ```python
 # tests/test_models.py
@@ -84,23 +84,23 @@ def test_default_settings():
     assert settings.retrieval_mode in ["local", "grpc"]
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/test_models.py -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'src'`
 
-- [ ] **Step 3: Setup virtual environment, dependencies & implement `config.py` and `models.py`**
+- [x] **Step 3: Setup virtual environment, dependencies & implement `config.py` and `models.py`**
 
 Create `pyproject.toml` with dependencies (`pydantic`, `pydantic-settings`, `pymupdf`, `sentence-transformers`, `qdrant-client`, `fastapi`, `uvicorn`, `grpcio`, `grpcio-tools`, `pytest`, `rapidocr-onnxruntime`).
 Install dependencies in virtual environment.
 Implement `src/config.py` and `src/models.py`.
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pytest tests/test_models.py -v`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 GIT_CONFIG_GLOBAL=/dev/null git add pyproject.toml src/ tests/
@@ -121,7 +121,7 @@ GIT_CONFIG_GLOBAL=/dev/null git commit -m "feat: setup project config, dependenc
 - Produces: `src.ingestion.pdf_extractor.extract_pages_from_pdf(pdf_path: str) -> list[dict[str, Any]]`
   - Output list item structure: `{"doc_name": str, "page_number": int, "text": str, "is_scanned": bool, "image_bytes": bytes | None}`
 
-- [ ] **Step 1: Write the failing test for PDF text extraction**
+- [x] **Step 1: Write the failing test for PDF text extraction**
 
 ```python
 # tests/test_pdf_extractor.py
@@ -152,12 +152,12 @@ def test_extract_pages_from_digital_pdf(sample_digital_pdf):
     assert "bảo trì định kỳ" in pages[1]["text"]
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/test_pdf_extractor.py -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'src.ingestion.pdf_extractor'`
 
-- [ ] **Step 3: Implement `extract_pages_from_pdf` in `src/ingestion/pdf_extractor.py`**
+- [x] **Step 3: Implement `extract_pages_from_pdf` in `src/ingestion/pdf_extractor.py`**
 
 Read PDF with `fitz.open(pdf_path)`.
 For each page:
@@ -165,12 +165,12 @@ For each page:
 - If `len(text.strip()) < 50`: mark `is_scanned=True` and render pixmap to PNG bytes (`page.get_pixmap(dpi=300).tobytes("png")`).
 - Else: mark `is_scanned=False`, `image_bytes=None`.
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pytest tests/test_pdf_extractor.py -v`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 GIT_CONFIG_GLOBAL=/dev/null git add src/ingestion/ tests/test_pdf_extractor.py
@@ -190,7 +190,7 @@ GIT_CONFIG_GLOBAL=/dev/null git commit -m "feat: implement PDF text extraction w
 - Produces: `src.ingestion.ocr_engine.OcrEngine.extract_text_from_image(image_bytes: bytes) -> str`
 - Modify: `src.ingestion.pdf_extractor.extract_pages_from_pdf(pdf_path: str, ocr_engine: OcrEngine | None = None) -> list[dict[str, Any]]`
 
-- [ ] **Step 1: Write the failing test for OCR engine**
+- [x] **Step 1: Write the failing test for OCR engine**
 
 ```python
 # tests/test_ocr_engine.py
@@ -214,22 +214,22 @@ def test_ocr_extract_text(sample_scanned_image_bytes):
     assert "AP SUAT" in text.upper() or "CANH BAO" in text.upper()
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/test_ocr_engine.py -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'src.ingestion.ocr_engine'`
 
-- [ ] **Step 3: Implement `OcrEngine` using RapidOCR / pytesseract**
+- [x] **Step 3: Implement `OcrEngine` using RapidOCR / pytesseract**
 
 Implement `OcrEngine` with support for RapidOCR (pure onnxruntime, cross-platform) with fallback or configurable engine.
 Integrate OCR engine inside `extract_pages_from_pdf` so when `is_scanned=True`, it automatically calls OCR to populate `text`.
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pytest tests/test_ocr_engine.py -v`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 GIT_CONFIG_GLOBAL=/dev/null git add src/ingestion/ocr_engine.py src/ingestion/pdf_extractor.py tests/test_ocr_engine.py
@@ -248,7 +248,7 @@ GIT_CONFIG_GLOBAL=/dev/null git commit -m "feat: add OCR engine fallback for sca
 - Consumes: Page dicts from `pdf_extractor`
 - Produces: `src.ingestion.chunker.chunk_document(pages: list[dict[str, Any]], chunk_size: int = 500, chunk_overlap: int = 50) -> list[DocumentChunk]`
 
-- [ ] **Step 1: Write the failing test for chunking**
+- [x] **Step 1: Write the failing test for chunking**
 
 ```python
 # tests/test_chunker.py
@@ -278,22 +278,22 @@ def test_chunk_preserves_page_metadata():
     assert all(isinstance(c, DocumentChunk) for c in chunks)
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/test_chunker.py -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'src.ingestion.chunker'`
 
-- [ ] **Step 3: Implement `chunk_document` in `src/ingestion/chunker.py`**
+- [x] **Step 3: Implement `chunk_document` in `src/ingestion/chunker.py`**
 
 Implement recursive text splitter with overlap respecting sentence/paragraph boundaries where possible.
 Generate unique `chunk_id` for each chunk using `hashlib.sha256(f"{doc_name}_{page}_{idx}_{text[:20]}".encode()).hexdigest()[:16]`.
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pytest tests/test_chunker.py -v`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 GIT_CONFIG_GLOBAL=/dev/null git add src/ingestion/chunker.py tests/test_chunker.py
@@ -318,7 +318,7 @@ GIT_CONFIG_GLOBAL=/dev/null git commit -m "feat: implement chunker preserving do
   - `src.vector_store.qdrant_store.QdrantVectorStore.upsert_chunks(chunks: list[DocumentChunk]) -> int`
   - `src.vector_store.qdrant_store.QdrantVectorStore.search(query_vector: list[float], top_k: int = 5) -> list[RetrievalResult]`
 
-- [ ] **Step 1: Write the failing test for embedding and vector store**
+- [x] **Step 1: Write the failing test for embedding and vector store**
 
 ```python
 # tests/test_vector_store.py
@@ -364,22 +364,22 @@ def test_embed_and_search(temp_qdrant_store):
     assert results[0].score > 0.0
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/test_vector_store.py -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'src.vector_store.embedding'`
 
-- [ ] **Step 3: Implement `EmbeddingModel` and `QdrantVectorStore`**
+- [x] **Step 3: Implement `EmbeddingModel` and `QdrantVectorStore`**
 
 `EmbeddingModel`: wraps `SentenceTransformer(model_name)` with batching and normalized embeddings.
 `QdrantVectorStore`: uses `QdrantClient(path=storage_path)` (local disk mode). Creates collection with Cosine distance and 384 dimensions if not exists. Stores chunk attributes as payload.
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pytest tests/test_vector_store.py -v`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 GIT_CONFIG_GLOBAL=/dev/null git add src/vector_store/ tests/test_vector_store.py
@@ -401,7 +401,7 @@ GIT_CONFIG_GLOBAL=/dev/null git commit -m "feat: add SentenceTransformer embeddi
 - Produces: `src.retrieval.base.BaseRetriever`, `src.retrieval.local.LocalRetriever`
   - Method: `search(query: str, top_k: int = 5) -> list[RetrievalResult]`
 
-- [ ] **Step 1: Write the failing test for LocalRetriever**
+- [x] **Step 1: Write the failing test for LocalRetriever**
 
 ```python
 # tests/test_retrieval.py
@@ -429,22 +429,22 @@ def test_local_retriever_conforms_to_base(tmp_path):
     assert results[0].chunk.page_number == 2
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/test_retrieval.py -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'src.retrieval.base'`
 
-- [ ] **Step 3: Implement `BaseRetriever` and `LocalRetriever`**
+- [x] **Step 3: Implement `BaseRetriever` and `LocalRetriever`**
 
 Define abstract class `BaseRetriever(ABC)`.
 Implement `LocalRetriever`: embeds query, queries `vector_store.search()`, returns `list[RetrievalResult]`.
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pytest tests/test_retrieval.py -v`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 GIT_CONFIG_GLOBAL=/dev/null git add src/retrieval/ tests/test_retrieval.py
@@ -465,7 +465,7 @@ GIT_CONFIG_GLOBAL=/dev/null git commit -m "feat: implement BaseRetriever interfa
 - Consumes: `list[RetrievalResult]`
 - Produces: `src.rag.generator.RAGGenerator.generate_answer(question: str, context_chunks: list[RetrievalResult]) -> QAResponse`
 
-- [ ] **Step 1: Write the failing test for prompt formatting and abstention parsing**
+- [x] **Step 1: Write the failing test for prompt formatting and abstention parsing**
 
 ```python
 # tests/test_rag.py
@@ -505,22 +505,22 @@ def test_citation_parsing():
     assert response.citations[0].page_number == 12
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/test_rag.py -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'src.rag.prompt'`
 
-- [ ] **Step 3: Implement prompt template and `RAGGenerator`**
+- [x] **Step 3: Implement prompt template and `RAGGenerator`**
 
 Implement `src/rag/prompt.py` with standard citations instructions and the explicit `ABSTAIN_PHRASE`: `"Tôi không tìm thấy thông tin này trong tài liệu được cung cấp."`.
 Implement `src/rag/generator.py`: calls LLM (Gemini or OpenAI API), regex parses `[Tài liệu: (.*?), Trang (\d+)]` to populate `citations`, checks if answer matches abstain phrase to set `abstained=True`.
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pytest tests/test_rag.py -v`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 GIT_CONFIG_GLOBAL=/dev/null git add src/rag/ tests/test_rag.py
@@ -544,7 +544,7 @@ GIT_CONFIG_GLOBAL=/dev/null git commit -m "feat: implement RAG prompt, citation 
   - `src.eval.metrics.evaluate_abstention(should_abstain: bool, actually_abstained: bool) -> bool`
   - `src.eval.runner.run_benchmark(retriever: BaseRetriever, ground_truth_file: str, k_values: list[int]) -> dict[str, Any]`
 
-- [ ] **Step 1: Write the failing test for evaluation metrics**
+- [x] **Step 1: Write the failing test for evaluation metrics**
 
 ```python
 # tests/test_eval.py
@@ -567,21 +567,21 @@ def test_abstention_metric():
     assert evaluate_abstention(should_abstain=False, actually_abstained=True) is False
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/test_eval.py -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'src.eval.metrics'`
 
-- [ ] **Step 3: Implement `metrics.py`, `runner.py`, and sample `data/eval/ground_truth.json`**
+- [x] **Step 3: Implement `metrics.py`, `runner.py`, and sample `data/eval/ground_truth.json`**
 
 Implement formula for Recall@K, Abstention rate, and runner outputting formatted Markdown benchmark table. Create at least 15 QA pairs in `ground_truth.json`.
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pytest tests/test_eval.py -v`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 GIT_CONFIG_GLOBAL=/dev/null git add data/eval/ src/eval/ tests/test_eval.py
@@ -604,7 +604,7 @@ GIT_CONFIG_GLOBAL=/dev/null git commit -m "feat: implement evaluation metrics an
   - `POST /api/v1/query`: Nhận `QARequest(question, top_k)`, trả về `QAResponse`.
   - `GET /api/v1/health`: Trả về trạng thái hệ thống.
 
-- [ ] **Step 1: Write the failing test for FastAPI endpoints**
+- [x] **Step 1: Write the failing test for FastAPI endpoints**
 
 ```python
 # tests/test_api.py
@@ -628,21 +628,21 @@ def test_query_endpoint_structure():
     assert "abstained" in data
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/test_api.py -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'src.api.main'`
 
-- [ ] **Step 3: Implement FastAPI routes and app lifespan**
+- [x] **Step 3: Implement FastAPI routes and app lifespan**
 
 Implement `src/api/routes.py` and `src/api/main.py`. Initialize `BaseRetriever` and `RAGGenerator` at startup. Add upload endpoint accepting multipart PDF.
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pytest tests/test_api.py -v`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 GIT_CONFIG_GLOBAL=/dev/null git add src/api/ tests/test_api.py
@@ -667,7 +667,7 @@ GIT_CONFIG_GLOBAL=/dev/null git commit -m "feat: implement FastAPI upload and Q&
   - `src.rpc.server.RetrievalGrpcServer`: runs gRPC server on specified port.
   - `src.retrieval.grpc_client.GrpcRetriever`: implements `BaseRetriever`, connects to gRPC server and translates protobuf responses.
 
-- [ ] **Step 1: Write the failing test for gRPC client/server**
+- [x] **Step 1: Write the failing test for gRPC client/server**
 
 ```python
 # tests/test_grpc.py
@@ -707,23 +707,23 @@ def test_grpc_retriever_queries_server(running_grpc_server):
     assert results[0].chunk.doc_name == "motor.pdf"
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/test_grpc.py -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'src.rpc.server'`
 
-- [ ] **Step 3: Define `proto/retrieval.proto`, compile stubs, implement server & client adapter**
+- [x] **Step 3: Define `proto/retrieval.proto`, compile stubs, implement server & client adapter**
 
 Compile protobuf stubs with `python -m grpc_tools.protoc -I. --python_out=. --grpc_python_out=. proto/retrieval.proto`.
 Implement `RetrievalServicer` in `src/rpc/server.py`.
 Implement `GrpcRetriever` in `src/retrieval/grpc_client.py` adhering strictly to `BaseRetriever`.
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pytest tests/test_grpc.py -v`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 GIT_CONFIG_GLOBAL=/dev/null git add proto/ src/rpc/ src/retrieval/grpc_client.py tests/test_grpc.py
@@ -743,7 +743,7 @@ GIT_CONFIG_GLOBAL=/dev/null git commit -m "feat: implement gRPC retrieval servic
 **Interfaces:**
 - Verification: Full end-to-end flow: Ingest sample documents -> Run benchmark -> Run query via FastAPI with citations & abstention -> Validate gRPC switch.
 
-- [ ] **Step 1: Write the failing end-to-end integration test**
+- [x] **Step 1: Write the failing end-to-end integration test**
 
 ```python
 # tests/test_e2e.py
@@ -776,12 +776,12 @@ def test_full_pipeline_on_sample_docs(tmp_path):
     assert report["recall@5"] >= 0.7
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/test_e2e.py -v`
 Expected: FAIL with `AssertionError: Sample doc must exist`
 
-- [ ] **Step 3: Generate sample PDF documents, run benchmark, write README.md**
+- [x] **Step 3: Generate sample PDF documents, run benchmark, write README.md**
 
 Generate synthetic technical PDF sample files using PyMuPDF (digital pump manual + scanned diagram).
 Execute benchmark to confirm Recall@5 threshold.
@@ -791,12 +791,12 @@ Write comprehensive `README.md` with:
 - Ingestion & OCR instructions.
 - How to run evaluation and interpret Recall@K.
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pytest tests/test_e2e.py -v`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 GIT_CONFIG_GLOBAL=/dev/null git add sample_docs/ README.md tests/test_e2e.py
