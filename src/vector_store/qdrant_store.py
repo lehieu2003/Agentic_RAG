@@ -43,21 +43,12 @@ class QdrantVectorStore:
         chunks: List[DocumentChunk],
         vectors: List[List[float]]
     ) -> int:
-        """Insert or update chunks along with precomputed vectors.
-
-        Args:
-            chunks: List of DocumentChunk models.
-            vectors: Precomputed embedding vectors matching chunks.
-
-        Returns:
-            Number of points successfully upserted.
-        """
+        """Insert or update chunks along with precomputed vectors."""
         if not chunks:
             return 0
 
         points: List[PointStruct] = []
         for chunk, vector in zip(chunks, vectors):
-            # Qdrant requires UUID string or unsigned integer for point IDs
             point_uuid = str(uuid.uuid5(uuid.NAMESPACE_DNS, chunk.chunk_id))
             payload = {
                 "chunk_id": chunk.chunk_id,
@@ -75,15 +66,7 @@ class QdrantVectorStore:
         return len(points)
 
     def search(self, query_vector: List[float], top_k: int = 5) -> List[RetrievalResult]:
-        """Perform semantic search for nearest document chunks.
-
-        Args:
-            query_vector: Embedding vector of the query.
-            top_k: Number of nearest neighbors to return.
-
-        Returns:
-            List of RetrievalResult instances.
-        """
+        """Perform semantic search for nearest document chunks."""
         response = self.client.query_points(
             collection_name=self.collection_name,
             query=query_vector,
@@ -105,3 +88,7 @@ class QdrantVectorStore:
 
         return results
 
+    def close(self) -> None:
+        """Release underlying client file lock and resources."""
+        if hasattr(self, "client") and self.client is not None:
+            self.client.close()
