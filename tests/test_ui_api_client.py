@@ -42,3 +42,4 @@ def test_query_success():
         assert resp.abstained is False
         assert len(resp.citations) == 1
         assert resp.citations[0].page_number == 1
+

@@ -1,7 +1,15 @@
 """ChatGPT-style conversational Streamlit UI for Document Q&A Assistant."""
 
 import os
+import sys
+from pathlib import Path
 from typing import Any, Dict
+
+# Ensure project root is in sys.path when executed via `streamlit run src/ui/app.py`
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
 import streamlit as st
 
 from src.ui.api_client import ApiClient
@@ -10,6 +18,7 @@ from src.ui.components.chat import (
     render_assistant_message,
 )
 from src.ui.components.sidebar import render_sidebar
+
 
 
 def init_session_state(state: Dict[str, Any]) -> None:

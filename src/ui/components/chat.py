@@ -93,3 +93,4 @@ def render_assistant_message(message: Union[dict, QAResponse]) -> None:
 
     if retrieved_chunks:
         render_evidence_expander(retrieved_chunks)
+

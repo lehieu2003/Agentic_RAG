@@ -92,3 +92,4 @@ def render_sidebar(api_client: ApiClient) -> Dict[str, Any]:
         "reset_chat": reset_chat,
         "uploaded": uploaded,
     }
+
