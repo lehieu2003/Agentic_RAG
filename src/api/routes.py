@@ -71,9 +71,14 @@ async def upload_document(
                 detail="Document indexing is not supported by the active retrieval backend (e.g. gRPC mode)."
             )
 
+        scanned_count = sum(1 for p in pages if p.get("is_scanned"))
+        digital_count = len(pages) - scanned_count
+
         return {
             "filename": file.filename,
             "pages_extracted": len(pages),
+            "pages_digital": digital_count,
+            "pages_scanned_ocr": scanned_count,
             "chunks_indexed": indexed_count,
             "status": "success"
         }

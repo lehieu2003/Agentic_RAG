@@ -82,5 +82,39 @@ def test_render_sidebar_basic(mock_uploader, mock_slider, mock_button, mock_side
     assert res["reset_chat"] is False
     assert res["uploaded"] is False
 
+@patch("streamlit.sidebar")
+@patch("streamlit.status")
+@patch("streamlit.button")
+@patch("streamlit.slider")
+@patch("streamlit.file_uploader")
+@patch("streamlit.columns")
+def test_render_sidebar_upload_process(mock_columns, mock_uploader, mock_slider, mock_button, mock_status, mock_sidebar):
+    from src.ui.components.sidebar import render_sidebar
+    mock_client = MagicMock()
+    mock_client.check_health.return_value = {"status": "ok", "retrieval_mode": "local"}
+    mock_client.upload_document.return_value = {
+        "filename": "manual.pdf",
+        "pages_extracted": 3,
+        "pages_digital": 2,
+        "pages_scanned_ocr": 1,
+        "chunks_indexed": 9,
+        "status": "success",
+    }
+    mock_slider.return_value = 3
+    mock_button.return_value = True  # user clicked upload
+    mock_file = MagicMock()
+    mock_file.name = "manual.pdf"
+    mock_file.getvalue.return_value = b"%PDF-dummy"
+    mock_uploader.return_value = mock_file
+    mock_status_ctx = MagicMock()
+    mock_status.return_value.__enter__.return_value = mock_status_ctx
+    mock_columns.return_value = [MagicMock(), MagicMock()]
+
+    res = render_sidebar(mock_client)
+    assert res["uploaded"] is True
+    mock_status.assert_called_once()
+    mock_status_ctx.update.assert_called_once()
+
+
 
 

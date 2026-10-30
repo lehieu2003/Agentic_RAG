@@ -70,19 +70,58 @@ def render_sidebar(api_client: ApiClient) -> Dict[str, Any]:
         uploaded = False
         if uploaded_file is not None:
             if st.button("🚀 Nạp vào hệ thống", use_container_width=True, type="primary"):
-                with st.spinner(f"Đang xử lý `{uploaded_file.name}`..."):
+                with st.status(f"Đang xử lý `{uploaded_file.name}`...", expanded=True) as status:
                     try:
+                        st.write("📥 **[1/4]** Tiếp nhận tệp và phân tích cấu trúc PDF...")
                         file_bytes = uploaded_file.getvalue()
                         resp = api_client.upload_document(file_bytes, uploaded_file.name)
-                        pages = resp.get("pages_processed", 0)
-                        chunks = resp.get("chunks_created", 0)
-                        st.success(
-                            f"✅ Đã nạp thành công `{uploaded_file.name}`!\n\n"
-                            f"- Số trang: **{pages}**\n- Số chunks: **{chunks}**"
+
+                        pages = resp.get("pages_extracted") or resp.get("pages_processed", 0)
+                        pages_digital = resp.get("pages_digital", pages)
+                        pages_scanned = resp.get("pages_scanned_ocr", 0)
+                        chunks = resp.get("chunks_indexed") or resp.get("chunks_created", 0)
+
+                        st.write(
+                            f"🔍 **[2/4]** Bóc tách xong **{pages} trang** "
+                            f"({pages_digital} trang số, {pages_scanned} trang qua RapidOCR)"
                         )
+                        st.write(
+                            f"✂️ **[3/4]** Phân đoạn ngữ nghĩa thành **{chunks} chunks** "
+                            f"(gối đầu 50 ký tự, bảo toàn số trang)"
+                        )
+                        st.write("🧠 **[4/4]** Tạo vector embedding 384 chiều & lưu trữ thành công vào Qdrant")
+
+                        status.update(
+                            label=f"✅ Nạp hoàn tất: {uploaded_file.name}!",
+                            state="complete",
+                            expanded=False,
+                        )
+
+                        col1, col2 = st.columns(2)
+                        col1.metric("Số trang", pages)
+                        col2.metric("Số Chunks", chunks)
+
+                        if pages_scanned > 0:
+                            st.info(f"💡 Phát hiện **{pages_scanned}** trang scan/ảnh và đã nhận diện tự động bằng RapidOCR.")
+
                         uploaded = True
                     except Exception as exc:
-                        st.error(f"❌ Nạp tài liệu thất bại: {exc}")
+                        status.update(
+                            label="❌ Nạp tài liệu thất bại!",
+                            state="error",
+                            expanded=True,
+                        )
+                        st.error(f"Chi tiết lỗi: {exc}")
+
+        with st.expander("ℹ️ Quy trình xử lý tài liệu (Pipeline)", expanded=False):
+            st.markdown(
+                """
+                1. **Bóc tách trang:** Dùng PyMuPDF đọc text số. Nếu trang `< 50` ký tự, tự động kích hoạt **RapidOCR (300 DPI)**.
+                2. **Phân đoạn (Chunking):** Cắt nhỏ ~500 ký tự (overlap 50), bảo toàn `doc_name` và `page_number`.
+                3. **Vector hóa:** Tạo vector 384 chiều bằng mô hình `all-MiniLM-L6-v2`.
+                4. **Lưu trữ:** Lưu vào **Qdrant Vector DB** phục vụ tìm kiếm ngữ nghĩa và trích dẫn chuẩn xác.
+                """
+            )
 
         st.divider()
         st.caption("Phát triển với FastAPI, Streamlit, LangChain & Qdrant.")
