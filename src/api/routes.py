@@ -20,10 +20,13 @@ router = APIRouter(prefix="/api/v1")
 )
 def health(request: Request) -> Dict[str, Any]:
     """Health check endpoint returning system status."""
+    vstore = getattr(request.app.state, "vector_store", None)
+    vector_mode = "cloud" if getattr(vstore, "url", None) else "local"
     return {
         "status": "ok",
         "app_name": settings.app_name,
-        "retrieval_mode": settings.retrieval_mode
+        "retrieval_mode": settings.retrieval_mode,
+        "vector_store": vector_mode,
     }
 
 

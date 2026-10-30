@@ -10,7 +10,9 @@ def format_backend_status(health_info: Optional[Dict[str, Any]]) -> str:
     """Format backend health dictionary into human-readable status badge."""
     if health_info and health_info.get("status") == "ok":
         mode = health_info.get("retrieval_mode", "standard")
-        return f"🟢 Online ({mode})"
+        vstore = health_info.get("vector_store")
+        extra = f" | Qdrant {vstore.capitalize()}" if vstore else ""
+        return f"🟢 Online ({mode}{extra})"
     return "🔴 Offline"
 
 
