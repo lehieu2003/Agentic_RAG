@@ -10,4 +10,9 @@ os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 os.environ["QDRANT_URL"] = ""
 os.environ["QDRANT_API_KEY"] = ""
 
+# Ensure unit tests do not make external LLM network calls
+os.environ["GEMINI_API_KEY"] = ""
+os.environ["OPENAI_API_KEY"] = ""
+
+
 

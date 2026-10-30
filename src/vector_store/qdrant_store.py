@@ -26,12 +26,25 @@ class QdrantVectorStore:
         self.api_key = api_key
 
         if url:
-            self.client = QdrantClient(url=url, api_key=api_key)
-        elif storage_path == ":memory:":
+            try:
+                self.client = QdrantClient(url=url, api_key=api_key)
+                self._ensure_collection()
+                return
+            except Exception as e:
+                import logging
+                logging.getLogger("qdrant_store").warning(
+                    "Failed to connect to Qdrant Cloud (%s). Falling back to local embedded storage at '%s'.",
+                    e, storage_path
+                )
+                self.url = None
+                self.api_key = None
+
+        if storage_path == ":memory:":
             self.client = QdrantClient(location=":memory:")
         else:
-            Path(storage_path).mkdir(parents=True, exist_ok=True)
-            self.client = QdrantClient(path=storage_path)
+            local_path = storage_path or "data/qdrant_storage"
+            Path(local_path).mkdir(parents=True, exist_ok=True)
+            self.client = QdrantClient(path=local_path)
 
         self._ensure_collection()
 
