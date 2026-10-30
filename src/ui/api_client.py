@@ -8,9 +8,15 @@ from src.models import QAResponse
 class ApiClient:
     """HTTP Client for Document Q&A Assistant FastAPI service."""
 
-    def __init__(self, base_url: str = "http://localhost:8000/api/v1", timeout: float = 60.0):
+    def __init__(
+        self,
+        base_url: str = "http://localhost:8000/api/v1",
+        timeout: float = 60.0,
+        upload_timeout: float = 600.0,
+    ):
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
+        self.upload_timeout = upload_timeout
 
     def check_health(self) -> Optional[Dict[str, Any]]:
         """Check system health status.
@@ -27,20 +33,27 @@ class ApiClient:
         except Exception:
             return None
 
-    def upload_document(self, file_bytes: bytes, filename: str) -> Dict[str, Any]:
+    def upload_document(
+        self,
+        file_bytes: bytes,
+        filename: str,
+        timeout: Optional[float] = None,
+    ) -> Dict[str, Any]:
         """Upload a PDF file to the backend for OCR and vector indexing.
 
         Args:
             file_bytes: Raw binary bytes of the PDF file.
             filename: Original filename.
+            timeout: Optional custom timeout in seconds (defaults to upload_timeout=600s).
 
         Returns:
             Dict containing upload and indexing result.
 
         Raises:
-            Exception: If request fails or server returns an error.
+            RuntimeError: If request fails or server returns an error.
         """
-        with httpx.Client(timeout=self.timeout) as client:
+        use_timeout = timeout or self.upload_timeout
+        with httpx.Client(timeout=use_timeout) as client:
             files = {"file": (filename, file_bytes, "application/pdf")}
             resp = client.post(f"{self.base_url}/upload", files=files)
             if resp.status_code >= 400:

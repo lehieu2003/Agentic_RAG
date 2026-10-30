@@ -76,6 +76,7 @@ def render_sidebar(api_client: ApiClient) -> Dict[str, Any]:
                     try:
                         st.write("📥 **[1/4]** Tiếp nhận tệp và phân tích cấu trúc PDF...")
                         file_bytes = uploaded_file.getvalue()
+                        st.caption("⏳ Đang bóc tách & chạy OCR (với tài liệu scan nhiều trang, quá trình sẽ diễn ra trong 1 - 2 phút)...")
                         resp = api_client.upload_document(file_bytes, uploaded_file.name)
 
                         pages = resp.get("pages_extracted") or resp.get("pages_processed", 0)

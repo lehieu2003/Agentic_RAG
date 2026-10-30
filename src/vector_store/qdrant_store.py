@@ -27,7 +27,7 @@ class QdrantVectorStore:
 
         if url:
             try:
-                self.client = QdrantClient(url=url, api_key=api_key)
+                self.client = QdrantClient(url=url, api_key=api_key, timeout=60.0)
                 self._ensure_collection()
                 return
             except Exception as e:
@@ -78,10 +78,12 @@ class QdrantVectorStore:
             }
             points.append(PointStruct(id=point_uuid, vector=vector, payload=payload))
 
-        self.client.upsert(
-            collection_name=self.collection_name,
-            points=points
-        )
+        batch_size = 100
+        for i in range(0, len(points), batch_size):
+            self.client.upsert(
+                collection_name=self.collection_name,
+                points=points[i:i + batch_size]
+            )
         return len(points)
 
     def search(self, query_vector: List[float], top_k: int = 5) -> List[RetrievalResult]:

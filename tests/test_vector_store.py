@@ -57,7 +57,8 @@ def test_qdrant_cloud_initialization():
 
         mock_client_cls.assert_called_once_with(
             url="https://xyz-example.qdrant.io:6333",
-            api_key="secret-api-key"
+            api_key="secret-api-key",
+            timeout=60.0
         )
         assert store.url == "https://xyz-example.qdrant.io:6333"
         assert store.api_key == "secret-api-key"
