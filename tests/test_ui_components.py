@@ -60,3 +60,27 @@ def test_render_assistant_message_abstained(mock_markdown, mock_warning):
     mock_warning.assert_called_once()
     mock_markdown.assert_called_with("Không có thông tin.")
 
+def test_sidebar_health_mapping():
+    from src.ui.components.sidebar import format_backend_status
+    assert "Online" in format_backend_status({"status": "ok", "retrieval_mode": "local"})
+    assert "Offline" in format_backend_status(None)
+
+@patch("streamlit.sidebar")
+@patch("streamlit.button")
+@patch("streamlit.slider")
+@patch("streamlit.file_uploader")
+def test_render_sidebar_basic(mock_uploader, mock_slider, mock_button, mock_sidebar):
+    from src.ui.components.sidebar import render_sidebar
+    mock_client = MagicMock()
+    mock_client.check_health.return_value = {"status": "ok", "retrieval_mode": "local"}
+    mock_slider.return_value = 4
+    mock_button.return_value = False
+    mock_uploader.return_value = None
+
+    res = render_sidebar(mock_client)
+    assert res["top_k"] == 4
+    assert res["reset_chat"] is False
+    assert res["uploaded"] is False
+
+
+
