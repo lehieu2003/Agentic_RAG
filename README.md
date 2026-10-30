@@ -61,6 +61,13 @@ Hệ thống tuân thủ kiến trúc Clean / Hexagonal Modular Monorepo:
 6. **gRPC Retrieval Service**:
    - Định nghĩa API hợp đồng bằng Protocol Buffers (`proto/retrieval.proto`).
    - Cung cấp `start_grpc_server` và `GrpcRetriever` adapter. Chuyển đổi giữa chạy local và gRPC chỉ bằng 1 biến môi trường `RETRIEVAL_MODE=grpc`.
+7. **Giao diện Web Trực Quan (Streamlit ChatGPT-style UI)**:
+   - Giao diện chat phong cách ChatGPT hiện đại (`st.chat_message`, `st.chat_input`).
+   - Gợi ý câu hỏi bắt đầu (Prompt Suggestions) nhanh chóng.
+   - Hiển thị trích dẫn tài liệu minh bạch dạng badge (`📄 [doc_name, Trang X]`).
+   - Chi tiết bằng chứng truy xuất (Evidence chunks) với điểm tương đồng (Cosine similarity score).
+   - Sidebar quản lý: Nạp tài liệu PDF trực tiếp, điều chỉnh tham số `top_k`, kiểm tra trạng thái live backend API và nút tạo đoạn chat mới.
+
 
 ---
 
@@ -121,6 +128,22 @@ curl -X POST "http://localhost:8000/api/v1/query" \
     "top_k": 5
   }'
 ```
+
+### 6. Khởi chạy Giao diện Chatbot Streamlit (ChatGPT-style UI)
+Sau khi khởi động FastAPI Backend (bước 4), mở một tab terminal mới và chạy:
+```bash
+.venv/bin/streamlit run src/ui/app.py
+```
+- Truy cập giao diện tại: [http://localhost:8501](http://localhost:8501)
+- **Tính năng UI:**
+  - Nhập câu hỏi tự nhiên hoặc bấm vào các câu hỏi mẫu gợi ý trên màn hình.
+  - Sidebar bên trái:
+    - 🟢 Xem trạng thái kết nối tới FastAPI Backend theo thời gian thực.
+    - ⚙️ Kéo thanh trượt điều chỉnh độ sâu truy xuất `top_k` (từ 1 đến 10).
+    - 📁 Tải tệp PDF kỹ thuật mới trực tiếp vào hệ thống với thông báo số trang/chunks.
+    - ➕ Bấm "Cuộc trò chuyện mới" để xóa lịch sử và bắt đầu phiên hỏi đáp mới.
+  - Phản hồi từ Bot: Kèm trích dẫn tài liệu cụ thể và hộp mở rộng `🔍 Chi tiết đoạn trích dẫn (Evidence Chunks)` hiển thị điểm tương đồng vector.
+
 
 ---
 
