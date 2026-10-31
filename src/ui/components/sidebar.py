@@ -102,11 +102,18 @@ def render_sidebar(api_client: ApiClient) -> Dict[str, Any]:
                         except Exception as exc:
                             st.error(f"❌ Lỗi khi xử lý `{file.name}`: {exc}")
 
-                    if success_count > 0:
+                    if success_count == total_files_count:
                         status.update(
-                            label="Hoàn tất nạp tài liệu!",
+                            label="Hoàn tất nạp toàn bộ tài liệu!",
                             state="complete",
                             expanded=False,
+                        )
+                        uploaded = True
+                    elif success_count > 0:
+                        status.update(
+                            label=f"Nạp hoàn tất {success_count}/{total_files_count} tệp (có lỗi xảy ra)!",
+                            state="complete",
+                            expanded=True,
                         )
                         uploaded = True
                     else:
@@ -115,14 +122,15 @@ def render_sidebar(api_client: ApiClient) -> Dict[str, Any]:
                             state="error",
                             expanded=True,
                         )
+                        uploaded = False
 
-                    col1, col2, col3 = st.columns(3)
-                    col1.metric("Số tệp đã nạp", f"{success_count}/{total_files_count}")
-                    col2.metric("Tổng số trang", total_pages)
-                    col3.metric("Tổng số chunks", total_chunks)
+                col1, col2, col3 = st.columns(3)
+                col1.metric("Số tệp đã nạp", f"{success_count}/{total_files_count}")
+                col2.metric("Tổng số trang", total_pages)
+                col3.metric("Tổng số chunks", total_chunks)
 
-                    if scanned_pages_total > 0:
-                        st.info(f"💡 Phát hiện **{scanned_pages_total}** trang scan/ảnh và đã nhận diện tự động bằng RapidOCR.")
+                if scanned_pages_total > 0:
+                    st.info(f"💡 Phát hiện **{scanned_pages_total}** trang scan/ảnh và đã nhận diện tự động bằng RapidOCR.")
 
         with st.expander("ℹ️ Quy trình xử lý tài liệu (Pipeline)", expanded=False):
             st.markdown(

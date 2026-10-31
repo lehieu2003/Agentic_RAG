@@ -133,7 +133,7 @@ def test_render_sidebar_upload_process(mock_columns, mock_uploader, mock_slider,
     mock_client.upload_document.assert_any_call(b"DOCX-dummy", "notes.docx")
     mock_status.assert_called_once()
     mock_status_ctx.update.assert_called_once_with(
-        label="Hoàn tất nạp tài liệu!",
+        label="Hoàn tất nạp toàn bộ tài liệu!",
         state="complete",
         expanded=False,
     )
@@ -182,9 +182,9 @@ def test_render_sidebar_upload_partial_failure(
     assert mock_client.upload_document.call_count == 2
     mock_error.assert_called_once()
     mock_status_ctx.update.assert_called_once_with(
-        label="Hoàn tất nạp tài liệu!",
+        label="Nạp hoàn tất 1/2 tệp (có lỗi xảy ra)!",
         state="complete",
-        expanded=False,
+        expanded=True,
     )
     col1.metric.assert_called_with("Số tệp đã nạp", "1/2")
     col2.metric.assert_called_with("Tổng số trang", 2)

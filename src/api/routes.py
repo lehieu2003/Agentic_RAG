@@ -46,7 +46,8 @@ async def upload_document(
     2. Phân đoạn ngữ nghĩa (chunking) bảo toàn số trang.
     3. Sinh embedding và lưu trữ vào Qdrant Cloud.
     """
-    ext = Path(file.filename or "").suffix.lower()
+    safe_filename = Path(file.filename).name if file.filename else "uploaded_document"
+    ext = Path(safe_filename).suffix.lower()
     if ext not in SUPPORTED_EXTENSIONS:
         raise HTTPException(
             status_code=400,
@@ -65,10 +66,21 @@ async def upload_document(
         tmp_path = tmp.name
 
     try:
-        pages = extract_pages_from_document(tmp_path, ocr_engine=ocr_engine)
-        # Update doc_name to original filename
+        try:
+            pages = extract_pages_from_document(tmp_path, ocr_engine=ocr_engine)
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Corrupted or unreadable document '{file.filename}': {e}")
+
+        errors = [p["error"] for p in pages if p.get("error")]
+        if errors and not any(p.get("text", "").strip() for p in pages):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Failed to extract text from '{file.filename}': {errors[0]}"
+            )
+
+        # Update doc_name to safe filename
         for p in pages:
-            p["doc_name"] = file.filename
+            p["doc_name"] = safe_filename
 
         chunks = chunk_document(pages)
         try:
@@ -83,7 +95,7 @@ async def upload_document(
         digital_count = len(pages) - scanned_count
 
         return {
-            "filename": file.filename,
+            "filename": safe_filename,
             "pages_extracted": len(pages),
             "pages_digital": digital_count,
             "pages_scanned_ocr": scanned_count,

@@ -1,5 +1,6 @@
 """API Client wrapper communicating with FastAPI backend."""
 
+import mimetypes
 from typing import Any, Dict, Optional
 import httpx
 from src.models import QAResponse
@@ -39,10 +40,10 @@ class ApiClient:
         filename: str,
         timeout: Optional[float] = None,
     ) -> Dict[str, Any]:
-        """Upload a PDF file to the backend for OCR and vector indexing.
+        """Upload a document file to the backend for OCR and vector indexing.
 
         Args:
-            file_bytes: Raw binary bytes of the PDF file.
+            file_bytes: Raw binary bytes of the document file.
             filename: Original filename.
             timeout: Optional custom timeout in seconds (defaults to upload_timeout=600s).
 
@@ -53,8 +54,9 @@ class ApiClient:
             RuntimeError: If request fails or server returns an error.
         """
         use_timeout = timeout or self.upload_timeout
+        content_type = mimetypes.guess_type(filename)[0] or "application/octet-stream"
         with httpx.Client(timeout=use_timeout) as client:
-            files = {"file": (filename, file_bytes, "application/pdf")}
+            files = {"file": (filename, file_bytes, content_type)}
             resp = client.post(f"{self.base_url}/upload", files=files)
             if resp.status_code >= 400:
                 raise RuntimeError(f"API Error ({resp.status_code}): {resp.text}")

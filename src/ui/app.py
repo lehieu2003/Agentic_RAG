@@ -65,7 +65,7 @@ def main() -> None:
                 <div class="gpt-hero-icon">🤖</div>
                 <div class="gpt-hero-title">Tôi có thể giúp gì cho bạn hôm nay?</div>
                 <div class="gpt-hero-subtitle">
-                    Hỏi bất kỳ điều gì về thông số kỹ thuật, quy trình bảo dưỡng hoặc cách xử lý sự cố từ các tài liệu PDF đã nạp.
+                    Hỏi bất kỳ điều gì về thông số kỹ thuật, quy trình bảo dưỡng hoặc cách xử lý sự cố từ các tài liệu kỹ thuật đã nạp.
                 </div>
             </div>
             """,

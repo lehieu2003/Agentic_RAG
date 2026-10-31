@@ -145,3 +145,15 @@ def test_upload_unsupported_format_returns_400(client):
     data = response.json()
     assert "Unsupported file format" in data["detail"]
 
+
+def test_upload_corrupt_docx_returns_400(client):
+    corrupt_bytes = b"not a valid docx"
+    response = client.post(
+        "/api/v1/upload",
+        files={"file": ("corrupted.docx", io.BytesIO(corrupt_bytes), "application/vnd.openxmlformats-officedocument.wordprocessingml.document")}
+    )
+    assert response.status_code == 400
+    data = response.json()
+    assert "Failed to extract text" in data["detail"] or "Corrupted or unreadable document" in data["detail"]
+
+
