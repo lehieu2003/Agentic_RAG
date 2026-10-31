@@ -22,6 +22,10 @@ class Settings(BaseSettings):
     grpc_host: str = "localhost"
     retrieval_mode: Literal["local", "grpc"] = "local"
     min_relevance_score: float = 0.35
+    reranker_model: str = "BAAI/bge-reranker-base"
+    hybrid_rrf_k: int = 60
+    hybrid_candidate_top_k: int = 20
+    rerank_top_k: int = 5
 
     model_config = SettingsConfigDict(
         env_file=".env",

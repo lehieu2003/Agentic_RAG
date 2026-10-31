@@ -5,6 +5,7 @@ from src.retrieval.local import LocalRetriever
 from src.retrieval.grpc_client import GrpcRetriever
 from src.retrieval.bm25 import BM25Retriever
 from src.retrieval.hybrid import HybridRetriever
+from src.retrieval.reranker import CrossEncoderReranker
 
 __all__ = [
     "BaseRetriever",
@@ -12,4 +13,5 @@ __all__ = [
     "GrpcRetriever",
     "BM25Retriever",
     "HybridRetriever",
+    "CrossEncoderReranker",
 ]
