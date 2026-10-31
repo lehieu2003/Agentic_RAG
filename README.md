@@ -47,12 +47,12 @@ Hệ thống tuân thủ kiến trúc Clean / Hexagonal Modular Monorepo:
 1. **Multi-format Document Processing & OCR Fallback**:
    - Hỗ trợ đa dạng định dạng tài liệu kỹ thuật: **PDF** (`.pdf`), **Word** (`.docx`), **Text** (`.txt`), và **Ảnh** (`.png`, `.jpg`, `.jpeg`).
    - **PDF (PyMuPDF + RapidOCR)**: Tự động trích xuất trang văn bản số (digital text). Nếu mật độ văn bản thấp (< 50 ký tự, như tài liệu scan, bản vẽ, sơ đồ), tự động render ảnh 300 DPI và kích hoạt **RapidOCR** để nhận diện ký tự quang học.
-   - **Word (DOCX)**: Trích xuất đoạn văn bản cấu trúc qua `python-docx` kết hợp phân trang logic (logical pagination ~500 từ/trang).
-   - **Text (TXT)**: Đọc văn bản thuần hỗ trợ fallback bảng mã (UTF-8, Latin-1) kèm phân trang logic (~3000 ký tự/trang).
+   - **Word (DOCX)**: Trích xuất đoạn văn bản cấu trúc qua `python-docx` kết hợp phân trang logic (~2.000 ký tự/trang, `logical_page_size = 2000`).
+   - **Text (TXT)**: Đọc văn bản thuần hỗ trợ fallback bảng mã (UTF-8, Latin-1) kèm phân trang logic (~2.000 ký tự/trang, `logical_page_size = 2000`).
    - **Ảnh kỹ thuật (PNG, JPG, JPEG)**: Nhận diện nội dung chữ trực tiếp từ ảnh qua RapidOCR engine (gán trang mặc định là 1).
-2. **Multi-file Batch Upload & Tiến trình trực quan**:
-   - Tải lên đồng thời nhiều tệp tài liệu trong một lượt thao tác (cả qua REST API và giao diện Web).
-   - Tích hợp thanh tiến trình xử lý trực tiếp (`st.progress`) với thông báo tổng kết rõ ràng về số file thành công, số file lỗi, và tổng số chunk đã được index vào vector database.
+2. **Multi-file Batch Upload & Trạng thái trực quan**:
+   - Cho phép chọn và tải lên đồng thời nhiều tệp tài liệu trong một lượt thao tác. Endpoint `/api/v1/upload` xử lý 1 file/request; việc upload hàng loạt được điều phối tuần tự bởi Streamlit UI hoặc client script với cơ chế xử lý lỗi độc lập cho từng file.
+   - Theo dõi trạng thái trực tiếp theo thời gian thực qua container `st.status` và các thẻ thống kê `st.metric` (tổng số tệp, thành công, thất bại, và tổng số chunk đã nạp vào vector database).
 3. **Chunking bảo toàn số trang**:
    - Phân chia văn bản thành các đoạn (chunks) có overlap.
    - Giữ nguyên `doc_name` và `page_number` (1-indexed) ở từng chunk bất kể tài liệu là PDF, DOCX, TXT hay Ảnh.
@@ -73,7 +73,7 @@ Hệ thống tuân thủ kiến trúc Clean / Hexagonal Modular Monorepo:
    - Gợi ý câu hỏi bắt đầu (Prompt Suggestions) nhanh chóng.
    - Hiển thị trích dẫn tài liệu minh bạch dạng badge (`📄 [doc_name, Trang X]`).
    - Chi tiết bằng chứng truy xuất (Evidence chunks) với điểm tương đồng (Cosine similarity score).
-   - Sidebar quản lý: Nạp một hoặc nhiều tài liệu đồng thời (PDF, DOCX, TXT, PNG, JPG, JPEG) với thanh tiến trình trực quan, điều chỉnh tham số `top_k`, kiểm tra trạng thái live backend API và nút tạo đoạn chat mới.
+   - Sidebar quản lý: Nạp một hoặc nhiều tài liệu đồng thời (PDF, DOCX, TXT, PNG, JPG, JPEG) với trạng thái xử lý `st.status` và thẻ thống kê `st.metric`, điều chỉnh tham số `top_k`, kiểm tra trạng thái live backend API và nút tạo đoạn chat mới.
 
 
 ---
@@ -119,6 +119,8 @@ uvicorn src.api.main:app --host 0.0.0.0 --port 8000 --reload
 - Health Check: `GET http://localhost:8000/api/v1/health`
 
 ### 5. Sử dụng API
+Endpoint `/api/v1/upload` tiếp nhận 1 tệp mỗi lượt yêu cầu (`multipart/form-data`). Khi cần upload nhiều file (batch upload), phía client hoặc giao diện Streamlit sẽ điều phối gửi tuần tự từng file kèm xử lý kết quả độc lập:
+
 **Upload tài liệu (Hỗ trợ `.pdf`, `.docx`, `.txt`, `.png`, `.jpg`, `.jpeg`):**
 ```bash
 # Upload file PDF
@@ -163,8 +165,8 @@ Sau khi khởi động FastAPI Backend (bước 4), mở một tab terminal mớ
   - Sidebar bên trái:
     - 🟢 Xem trạng thái kết nối tới FastAPI Backend theo thời gian thực.
     - ⚙️ Kéo thanh trượt điều chỉnh độ sâu truy xuất `top_k` (từ 1 đến 10).
-    - 📁 **Tải lên hàng loạt tài liệu (Multi-file Batch Upload)**: Kéo thả hoặc chọn cùng lúc nhiều tệp định dạng `.pdf`, `.docx`, `.txt`, `.png`, `.jpg`, `.jpeg`.
-    - 📊 **Thanh tiến trình trực quan (Live Progress Tracking)**: Theo dõi tiến độ index từng tệp theo thời gian thực kèm báo cáo tổng kết số tệp thành công / thất bại và tổng số chunk đã được nạp.
+    - 📁 **Tải lên hàng loạt tài liệu (Multi-file Batch Upload)**: Kéo thả hoặc chọn cùng lúc nhiều tệp định dạng `.pdf`, `.docx`, `.txt`, `.png`, `.jpg`, `.jpeg`. Giao diện điều phối gửi tuần tự từng file lên API backend.
+    - 📊 **Theo dõi trạng thái trực tiếp (`st.status` & `st.metric`)**: Hộp `st.status` mở rộng cập nhật thời gian thực tiến độ từng tệp trong batch, kèm các thẻ `st.metric` tổng kết trực quan (Tổng số tệp, Thành công, Thất bại, Tổng số chunks đã nạp).
     - ➕ Bấm "Cuộc trò chuyện mới" để xóa lịch sử và bắt đầu phiên hỏi đáp mới.
   - Phản hồi từ Bot: Kèm trích dẫn tài liệu cụ thể và hộp mở rộng `🔍 Chi tiết đoạn trích dẫn (Evidence Chunks)` hiển thị điểm tương đồng vector.
 
