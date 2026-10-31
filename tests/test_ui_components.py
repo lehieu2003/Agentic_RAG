@@ -92,28 +92,139 @@ def test_render_sidebar_upload_process(mock_columns, mock_uploader, mock_slider,
     from src.ui.components.sidebar import render_sidebar
     mock_client = MagicMock()
     mock_client.check_health.return_value = {"status": "ok", "retrieval_mode": "local"}
-    mock_client.upload_document.return_value = {
-        "filename": "manual.pdf",
-        "pages_extracted": 3,
-        "pages_digital": 2,
-        "pages_scanned_ocr": 1,
-        "chunks_indexed": 9,
-        "status": "success",
-    }
+    mock_client.upload_document.side_effect = [
+        {
+            "filename": "manual.pdf",
+            "pages_extracted": 3,
+            "pages_digital": 2,
+            "pages_scanned_ocr": 1,
+            "chunks_indexed": 9,
+            "status": "success",
+        },
+        {
+            "filename": "notes.docx",
+            "pages_extracted": 2,
+            "pages_digital": 2,
+            "pages_scanned_ocr": 0,
+            "chunks_indexed": 4,
+            "status": "success",
+        },
+    ]
     mock_slider.return_value = 3
     mock_button.return_value = True  # user clicked upload
-    mock_file = MagicMock()
-    mock_file.name = "manual.pdf"
-    mock_file.getvalue.return_value = b"%PDF-dummy"
-    mock_uploader.return_value = mock_file
+
+    mock_file1 = MagicMock()
+    mock_file1.name = "manual.pdf"
+    mock_file1.getvalue.return_value = b"%PDF-dummy"
+
+    mock_file2 = MagicMock()
+    mock_file2.name = "notes.docx"
+    mock_file2.getvalue.return_value = b"DOCX-dummy"
+
+    mock_uploader.return_value = [mock_file1, mock_file2]
     mock_status_ctx = MagicMock()
     mock_status.return_value.__enter__.return_value = mock_status_ctx
-    mock_columns.return_value = [MagicMock(), MagicMock()]
+    mock_columns.return_value = [MagicMock(), MagicMock(), MagicMock()]
 
     res = render_sidebar(mock_client)
     assert res["uploaded"] is True
+    assert mock_client.upload_document.call_count == 2
+    mock_client.upload_document.assert_any_call(b"%PDF-dummy", "manual.pdf")
+    mock_client.upload_document.assert_any_call(b"DOCX-dummy", "notes.docx")
     mock_status.assert_called_once()
-    mock_status_ctx.update.assert_called_once()
+    mock_status_ctx.update.assert_called_once_with(
+        label="Hoàn tất nạp tài liệu!",
+        state="complete",
+        expanded=False,
+    )
+
+    # Check uploader args
+    _, kwargs = mock_uploader.call_args
+    assert kwargs.get("accept_multiple_files") is True
+    assert set(kwargs.get("type", [])) == {"pdf", "docx", "txt", "png", "jpg", "jpeg"}
+
+
+@patch("streamlit.sidebar")
+@patch("streamlit.status")
+@patch("streamlit.button")
+@patch("streamlit.slider")
+@patch("streamlit.file_uploader")
+@patch("streamlit.columns")
+@patch("streamlit.error")
+def test_render_sidebar_upload_partial_failure(
+    mock_error, mock_columns, mock_uploader, mock_slider, mock_button, mock_status, mock_sidebar
+):
+    from src.ui.components.sidebar import render_sidebar
+    mock_client = MagicMock()
+    mock_client.check_health.return_value = {"status": "ok"}
+    mock_client.upload_document.side_effect = [
+        {"filename": "ok.pdf", "pages_extracted": 2, "chunks_indexed": 3},
+        RuntimeError("Corrupt document"),
+    ]
+    mock_slider.return_value = 3
+    mock_button.return_value = True
+
+    f1 = MagicMock()
+    f1.name = "ok.pdf"
+    f1.getvalue.return_value = b"ok"
+    f2 = MagicMock()
+    f2.name = "corrupt.pdf"
+    f2.getvalue.return_value = b"corrupt"
+
+    mock_uploader.return_value = [f1, f2]
+    mock_status_ctx = MagicMock()
+    mock_status.return_value.__enter__.return_value = mock_status_ctx
+    col1, col2, col3 = MagicMock(), MagicMock(), MagicMock()
+    mock_columns.return_value = [col1, col2, col3]
+
+    res = render_sidebar(mock_client)
+    assert res["uploaded"] is True
+    assert mock_client.upload_document.call_count == 2
+    mock_error.assert_called_once()
+    mock_status_ctx.update.assert_called_once_with(
+        label="Hoàn tất nạp tài liệu!",
+        state="complete",
+        expanded=False,
+    )
+    col1.metric.assert_called_with("Số tệp đã nạp", "1/2")
+    col2.metric.assert_called_with("Tổng số trang", 2)
+    col3.metric.assert_called_with("Tổng số chunks", 3)
+
+
+@patch("streamlit.sidebar")
+@patch("streamlit.status")
+@patch("streamlit.button")
+@patch("streamlit.slider")
+@patch("streamlit.file_uploader")
+@patch("streamlit.columns")
+@patch("streamlit.error")
+def test_render_sidebar_upload_total_failure(
+    mock_error, mock_columns, mock_uploader, mock_slider, mock_button, mock_status, mock_sidebar
+):
+    from src.ui.components.sidebar import render_sidebar
+    mock_client = MagicMock()
+    mock_client.check_health.return_value = {"status": "ok"}
+    mock_client.upload_document.side_effect = RuntimeError("Network error")
+    mock_slider.return_value = 3
+    mock_button.return_value = True
+
+    f1 = MagicMock()
+    f1.name = "fail.pdf"
+    f1.getvalue.return_value = b"fail"
+
+    mock_uploader.return_value = [f1]
+    mock_status_ctx = MagicMock()
+    mock_status.return_value.__enter__.return_value = mock_status_ctx
+    mock_columns.return_value = [MagicMock(), MagicMock(), MagicMock()]
+
+    res = render_sidebar(mock_client)
+    assert res["uploaded"] is False
+    mock_status_ctx.update.assert_called_once_with(
+        label="Nạp tài liệu thất bại!",
+        state="error",
+        expanded=True,
+    )
+
 
 
 
