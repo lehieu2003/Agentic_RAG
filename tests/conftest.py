@@ -11,6 +11,11 @@ os.environ["QDRANT_URL"] = ""
 os.environ["QDRANT_API_KEY"] = ""
 os.environ["QDRANT_PATH"] = ":memory:"
 
+from src.config import settings
+settings.qdrant_url = ""
+settings.qdrant_api_key = ""
+settings.qdrant_path = ":memory:"
+
 
 # Ensure unit tests do not make external LLM network calls
 os.environ["GEMINI_API_KEY"] = ""

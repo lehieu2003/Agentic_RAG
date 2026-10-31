@@ -425,6 +425,14 @@ class AgenticRAG:
         else:
             reranked = candidates[:top_k]
 
+        # Guard: Preserve top candidates from hybrid search if absent from reranked set
+        reranked_keys = {self._get_chunk_key(r.chunk) for r in reranked}
+        for top_candidate in candidates[:2]:
+            key = self._get_chunk_key(top_candidate.chunk)
+            if key not in reranked_keys:
+                reranked.append(top_candidate)
+                reranked_keys.add(key)
+
         steps.append(f"4. rerank: Đã đánh giá và xếp hạng lại {len(reranked)} đoạn tài liệu phù hợp nhất")
         return {
             "reranked_chunks": reranked,
@@ -455,7 +463,8 @@ class AgenticRAG:
                 f"Câu hỏi của người dùng: '{clean_q}'\n\n"
                 f"Các đoạn trích dẫn tài liệu tìm được:\n{context_text}\n\n"
                 f"Nhiệm vụ: Hãy phân tích xem các đoạn trích trên có chứa thông tin hoặc căn cứ thực tế để trả lời cho câu hỏi hay không "
-                f"(bao gồm định nghĩa cốt lõi, khái niệm, nguyên lý, thông số hoặc hướng dẫn trong tài liệu). "
+                f"(bao gồm định nghĩa cốt lõi, khái niệm, phạm vi áp dụng, nguyên lý, thông số hoặc hướng dẫn trong tài liệu, "
+                f"kể cả khi các đoạn trích quét từ tài liệu OCR bị thiếu dấu tiếng Việt). "
                 f"Nếu có căn cứ để trả lời câu hỏi, hãy đánh giá is_sufficient: true. "
                 f"Chỉ trả về is_sufficient: false khi các đoạn trích hoàn toàn không chứa thông tin hoặc lệch chủ đề so với câu hỏi.\n"
                 f"Trả về kết quả dưới dạng JSON duy nhất với cấu trúc:\n"

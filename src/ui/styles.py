@@ -36,29 +36,44 @@ header[data-testid="stHeader"] {
 
 /* Ensure sidebar expand and collapse buttons (chevrons to toggle sidebar) are always visible and prominent */
 [data-testid="stExpandSidebarButton"],
+button[data-testid="stExpandSidebarButton"],
 [data-testid="stSidebarCollapseButton"],
-[data-testid="stSidebarCollapsedControl"] {
-    display: flex !important;
-    visibility: visible !important;
-    z-index: 999999 !important;
-}
-
-[data-testid="stExpandSidebarButton"] button,
 [data-testid="stSidebarCollapseButton"] button,
+[data-testid="stSidebarCollapsedControl"],
 [data-testid="stSidebarCollapsedControl"] button {
+    display: inline-flex !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    z-index: 999999 !important;
     background-color: #2f2f2f !important;
-    color: #ececec !important;
-    border: 1px solid #444444 !important;
+    color: #ffffff !important;
+    border: 1px solid #555555 !important;
     border-radius: 8px !important;
-    padding: 6px !important;
+    padding: 6px 10px !important;
+    cursor: pointer !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4) !important;
 }
 
-[data-testid="stExpandSidebarButton"] button:hover,
+[data-testid="stExpandSidebarButton"]:hover,
+button[data-testid="stExpandSidebarButton"]:hover,
+[data-testid="stSidebarCollapseButton"]:hover,
 [data-testid="stSidebarCollapseButton"] button:hover,
 [data-testid="stSidebarCollapsedControl"] button:hover {
-    background-color: #3f3f3f !important;
-    border-color: #666666 !important;
+    background-color: #3e3e3e !important;
+    border-color: #777777 !important;
     color: #ffffff !important;
+}
+
+[data-testid="stExpandSidebarButton"] svg,
+[data-testid="stExpandSidebarButton"] span,
+button[data-testid="stExpandSidebarButton"] svg,
+button[data-testid="stExpandSidebarButton"] span,
+[data-testid="stSidebarCollapseButton"] svg,
+[data-testid="stSidebarCollapseButton"] span,
+[data-testid="stSidebarCollapseButton"] button svg,
+[data-testid="stSidebarCollapseButton"] button span {
+    color: #ffffff !important;
+    fill: #ffffff !important;
 }
 
 /* Max Width Main Container (Centered like ChatGPT) */

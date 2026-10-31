@@ -11,7 +11,6 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 import streamlit as st
-import streamlit.components.v1 as components
 
 from src.ui.api_client import ApiClient
 from src.ui.components.chat import render_assistant_message
@@ -48,33 +47,6 @@ def main() -> None:
 
     # Inject ChatGPT styling
     st.markdown(CHATGPT_CUSTOM_CSS, unsafe_allow_html=True)
-
-    # Automatically expand sidebar if it was collapsed in browser localStorage
-    components.html(
-        """
-        <script>
-        function autoExpandSidebar() {
-            try {
-                for (let i = 0; i < localStorage.length; i++) {
-                    const key = localStorage.key(i);
-                    if (key && key.startsWith("stSidebarCollapsed")) {
-                        localStorage.removeItem(key);
-                    }
-                }
-            } catch (e) {}
-            const doc = window.parent.document;
-            const btn = doc.querySelector('[data-testid="stExpandSidebarButton"] button, [data-testid="stExpandSidebarButton"]');
-            if (btn) {
-                btn.click();
-            }
-        }
-        setTimeout(autoExpandSidebar, 50);
-        setTimeout(autoExpandSidebar, 300);
-        </script>
-        """,
-        height=0,
-        width=0
-    )
 
     api_base_url = os.environ.get("API_BASE_URL", "http://localhost:8000/api/v1")
     api_client = ApiClient(base_url=api_base_url)

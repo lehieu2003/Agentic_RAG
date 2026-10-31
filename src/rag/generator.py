@@ -16,6 +16,7 @@ class RAGGenerator:
         r"\[(?:Tài liệu:\s*|Nguồn:\s*)?([^,\]|\(\)\n]+?)(?:\s*\|\s*|\s*,\s*|\s*-\s*|\s*\(|\s+)Trang(?:\s*:)?\s*(\d+)\)?\]",
         re.IGNORECASE
     )
+    BRACKET_PATTERN = re.compile(r"\[([^\]\n]+)\]")
 
     def __init__(
         self,
@@ -28,6 +29,57 @@ class RAGGenerator:
         self.provider = provider
         self.model_name = model_name or ("gemini-3.5-flash-lite" if provider == "gemini" else "gpt-4o-mini")
         self.min_relevance_score = min_relevance_score
+
+    def extract_raw_citations(self, text: str) -> List[tuple]:
+        """Extract document names and page numbers from text supporting multiple pages and ranges.
+
+        Supports formats:
+        - [Tài liệu: doc.pdf, Trang 4]
+        - [Tài liệu: doc.pdf, Trang 1, 4]
+        - [Tài liệu: doc.pdf, Trang 1 và 4]
+        - [doc.pdf, Trang 1-3]
+        - [doc.pdf (Trang 5)]
+        - [Nguồn: doc.pdf | Trang: 12]
+        - [Trang 4] (doc_name empty)
+        """
+        extracted = []
+        for bracket in self.BRACKET_PATTERN.findall(text):
+            # Split document name and page part
+            parts = re.split(
+                r"(?:,\s*|\s*\|\s*|\s*-\s*|\s*\()?(?:các\s+)?(?:trang|page)(?:\s*:)?\s*",
+                bracket,
+                flags=re.IGNORECASE
+            )
+            if len(parts) >= 2:
+                raw_doc = parts[0].strip()
+                raw_doc = re.sub(
+                    r"^(?:tài\s+liệu|nguồn|file|tập\s+tin|doc)\s*:\s*",
+                    "",
+                    raw_doc,
+                    flags=re.IGNORECASE
+                ).strip()
+                raw_pages = parts[1].rstrip(")")
+                page_numbers = set()
+                # Check for ranges like 1-3 or 1–3
+                for r in re.finditer(r"(\d+)\s*[-–—]\s*(\d+)", raw_pages):
+                    start, end = int(r.group(1)), int(r.group(2))
+                    for p in range(start, min(end + 1, start + 50)):
+                        page_numbers.add(p)
+                # Check for individual numbers
+                for num in re.findall(r"\b\d+\b", raw_pages):
+                    page_numbers.add(int(num))
+                for p in sorted(page_numbers):
+                    extracted.append((raw_doc, p))
+
+        # Fallback to standard regex if bracket split didn't find any
+        if not extracted:
+            for doc_name, page_str in self.CITATION_PATTERN.findall(text):
+                try:
+                    extracted.append((doc_name.strip(), int(page_str.strip())))
+                except ValueError:
+                    continue
+
+        return extracted
 
     def parse_llm_output(
         self,
@@ -59,21 +111,20 @@ class RAGGenerator:
             norm_name = _norm(r.chunk.doc_name)
             valid_sources[(norm_name, r.chunk.page_number)] = r.chunk.doc_name
 
-        # Extract citations: e.g. [Tài liệu: doc.pdf, Trang 12]
-        matches = self.CITATION_PATTERN.findall(raw_clean)
+        # Extract citations: support multi-page citations and flexible formats
+        raw_citations = self.extract_raw_citations(raw_clean)
         seen_citations = set()
         citations: List[Citation] = []
 
-        for doc_name, page_str in matches:
+        for doc_name, page_num in raw_citations:
             doc_name_clean = doc_name.strip()
-            page_num = int(page_str.strip())
             norm_cited = _norm(doc_name_clean)
 
             # Check grounding: exact match first, then flexible match (stem or substring)
             matched_canonical_name = None
             if (norm_cited, page_num) in valid_sources:
                 matched_canonical_name = valid_sources[(norm_cited, page_num)]
-            else:
+            elif norm_cited:
                 for (v_doc, v_page), orig_doc in valid_sources.items():
                     if v_page == page_num:
                         if norm_cited in v_doc or v_doc in norm_cited:
@@ -82,6 +133,13 @@ class RAGGenerator:
                         if Path(norm_cited).stem == Path(v_doc).stem:
                             matched_canonical_name = orig_doc
                             break
+            else:
+                # LLM cited without document name (e.g. [Trang 4]), infer from single-doc context
+                candidate_docs = [orig_doc for (v_doc, v_page), orig_doc in valid_sources.items() if v_page == page_num]
+                if len(candidate_docs) == 1:
+                    matched_canonical_name = candidate_docs[0]
+                elif len(set(valid_sources.values())) == 1:
+                    matched_canonical_name = list(valid_sources.values())[0]
 
             if matched_canonical_name is not None:
                 source_key = (_norm(matched_canonical_name), page_num)

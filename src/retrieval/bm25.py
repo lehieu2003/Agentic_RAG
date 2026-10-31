@@ -3,6 +3,7 @@
 import math
 import re
 from typing import List, Optional
+import unicodedata
 import numpy as np
 from rank_bm25 import BM25Okapi
 
@@ -38,15 +39,34 @@ class BM25Retriever(BaseRetriever):
             self.index_chunks(chunks)
 
     @staticmethod
-    def tokenize(text: str) -> List[str]:
-        """Tokenize text preserving alphanumeric terms and punctuation symbols.
+    def _remove_accents(text: str) -> str:
+        """Convert accented Vietnamese string into unaccented ASCII equivalent."""
+        s = text.replace("đ", "d").replace("Đ", "D")
+        nfkd = unicodedata.normalize("NFKD", s)
+        return "".join(c for c in nfkd if not unicodedata.combining(c))
+
+    @classmethod
+    def tokenize(cls, text: str, expand_accents: bool = False) -> List[str]:
+        """Tokenize text preserving alphanumeric terms, symbols, and optionally expanding Vietnamese accents.
 
         Preserves technical identifiers such as TCVN 9222:2012, ISO 9906:1999,
-        and model codes like TKE-380.
+        and model codes like TKE-380. When expand_accents is True, generates both
+        accented and unaccented tokens for Vietnamese words to ensure high recall
+        against noisy OCR text.
         """
         if not text or not isinstance(text, str):
             return []
-        return TOKEN_PATTERN.findall(text.lower())
+        norm_text = unicodedata.normalize("NFC", text).lower()
+        base_tokens = TOKEN_PATTERN.findall(norm_text)
+        if not expand_accents:
+            return base_tokens
+        tokens: List[str] = []
+        for tok in base_tokens:
+            tokens.append(tok)
+            unacc = cls._remove_accents(tok)
+            if unacc != tok:
+                tokens.append(unacc)
+        return tokens
 
     def index_chunks(self, chunks: List[DocumentChunk]) -> int:
         """Index a batch of document chunks into the BM25 model.
@@ -65,7 +85,7 @@ class BM25Retriever(BaseRetriever):
                 existing_ids[chunk.chunk_id] = len(self.chunks)
                 self.chunks.append(chunk)
 
-        tokenized_corpus = [self.tokenize(c.text) for c in self.chunks]
+        tokenized_corpus = [self.tokenize(c.text, expand_accents=True) for c in self.chunks]
         self.bm25 = SafeBM25Okapi(tokenized_corpus)
         return len(chunks)
 
@@ -80,7 +100,7 @@ class BM25Retriever(BaseRetriever):
         ]
         deleted_count = initial_len - len(self.chunks)
         if self.chunks:
-            tokenized_corpus = [self.tokenize(c.text) for c in self.chunks]
+            tokenized_corpus = [self.tokenize(c.text, expand_accents=True) for c in self.chunks]
             self.bm25 = SafeBM25Okapi(tokenized_corpus)
         else:
             self.bm25 = None
@@ -107,7 +127,7 @@ class BM25Retriever(BaseRetriever):
         if top_k <= 0 or not self.chunks or self.bm25 is None:
             return []
 
-        tokens = self.tokenize(query)
+        tokens = self.tokenize(query, expand_accents=True)
         if not tokens:
             return []
 
