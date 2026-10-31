@@ -20,11 +20,11 @@ class RAGGenerator:
         llm_client: Optional[Any] = None,
         provider: str = "gemini",
         model_name: Optional[str] = None,
-        min_relevance_score: float = 0.45
+        min_relevance_score: float = 0.35
     ):
         self.llm_client = llm_client
         self.provider = provider
-        self.model_name = model_name or ("gemini-3.8-flash" if provider == "gemini" else "gpt-4o-mini")
+        self.model_name = model_name or ("gemini-3.5-flash-lite" if provider == "gemini" else "gpt-4o-mini")
         self.min_relevance_score = min_relevance_score
 
     def parse_llm_output(
@@ -120,11 +120,26 @@ class RAGGenerator:
         # Live LLM API invocation
         try:
             if self.provider == "gemini":
-                response = self.llm_client.models.generate_content(
-                    model=self.model_name,
-                    contents=prompt
-                )
-                raw_text = response.text or ""
+                candidate_models = [self.model_name]
+                for fb in ["gemini-flash-lite-latest", "gemini-3.1-flash-lite"]:
+                    if fb not in candidate_models:
+                        candidate_models.append(fb)
+                raw_text = ""
+                last_err = None
+                for m in candidate_models:
+                    try:
+                        response = self.llm_client.models.generate_content(
+                            model=m,
+                            contents=prompt
+                        )
+                        raw_text = response.text or ""
+                        if raw_text:
+                            break
+                    except Exception as err:
+                        last_err = err
+                        continue
+                if not raw_text and last_err:
+                    raise last_err
             elif self.provider == "openai":
                 response = self.llm_client.chat.completions.create(
                     model=self.model_name,

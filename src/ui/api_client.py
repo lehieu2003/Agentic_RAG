@@ -12,7 +12,7 @@ class ApiClient:
     def __init__(
         self,
         base_url: str = "http://localhost:8000/api/v1",
-        timeout: float = 60.0,
+        timeout: float = 120.0,
         upload_timeout: float = 600.0,
     ):
         self.base_url = base_url.rstrip("/")

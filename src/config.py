@@ -15,12 +15,13 @@ class Settings(BaseSettings):
     qdrant_api_key: str = ""
     embedding_model: str = "all-MiniLM-L6-v2"
     llm_provider: Literal["gemini", "openai", "mock"] = "gemini"
+    gemini_model: str = "gemini-3.5-flash-lite"
     gemini_api_key: str = ""
     openai_api_key: str = ""
     grpc_port: int = 50051
     grpc_host: str = "localhost"
     retrieval_mode: Literal["local", "grpc"] = "local"
-    min_relevance_score: float = 0.45
+    min_relevance_score: float = 0.35
 
     model_config = SettingsConfigDict(
         env_file=".env",

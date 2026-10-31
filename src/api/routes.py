@@ -219,11 +219,13 @@ def query_assistant(
 
     llm_client = getattr(agent_instance, "llm_client", getattr(generator, "llm_client", None))
     provider = getattr(agent_instance, "provider", getattr(generator, "provider", settings.llm_provider))
+    model_name = getattr(agent_instance, "model_name", getattr(generator, "model_name", settings.gemini_model))
 
     agent = AgenticRAG(
         retriever=retriever,
         llm_client=llm_client,
         provider=provider,
+        model_name=model_name,
         min_relevance_score=settings.min_relevance_score
     )
 

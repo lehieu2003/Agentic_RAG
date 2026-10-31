@@ -29,7 +29,7 @@ def test_agent_query_expansion_generates_variations():
     # 1. Deterministic / mock mode without LLM
     variations = agent.expand_query("áp suất máy bơm")
     assert isinstance(variations, list)
-    assert 1 <= len(variations) <= 3
+    assert 1 <= len(variations) <= 4
     assert len(set(variations)) == len(variations)  # All distinct
     assert any("áp suất máy bơm" in v for v in variations)
 
@@ -39,7 +39,7 @@ def test_agent_query_expansion_generates_variations():
     agent_with_llm = AgenticRAG(retriever=mock_retriever, llm_client=mock_llm, provider="gemini")
     llm_variations = agent_with_llm.expand_query("áp suất máy bơm")
     assert isinstance(llm_variations, list)
-    assert 1 <= len(llm_variations) <= 3
+    assert 1 <= len(llm_variations) <= 4
     assert len(set(llm_variations)) == len(llm_variations)
     assert "áp suất tối đa máy bơm" in llm_variations
 
@@ -161,3 +161,30 @@ def test_agent_abstains_when_no_relevant_data_found():
     assert ABSTAIN_PHRASE in response.answer
     assert len(response.citations) == 0
     assert response.reasoning_steps is not None
+
+
+def test_agent_chitchat_router_handles_greetings_without_db_query():
+    """Verify that greetings and bot introductory queries respond immediately without querying retriever."""
+    mock_retriever = MagicMock(spec=BaseRetriever)
+    agent = AgenticRAG(retriever=mock_retriever, llm_client=None)
+
+    greetings = ["hello", "Hello!", "hi", "xin chào", "Chào bạn", "bạn là ai", "cảm ơn", "tạm biệt"]
+    for q in greetings:
+        resp = agent.answer(q)
+        assert resp.abstained is False, f"Failed for '{q}'"
+        assert len(resp.citations) == 0
+        assert len(resp.retrieved_chunks) == 0
+        assert len(resp.answer.strip()) > 10
+        assert any("Chit-chat" in step for step in resp.reasoning_steps)
+
+    # Verify retriever search was never called for chit-chat
+    mock_retriever.search.assert_not_called()
+
+
+def test_agent_expand_query_includes_unaccented_vietnamese():
+    """Verify that query expansion adds unaccented Vietnamese variation for OCR tolerance."""
+    mock_retriever = MagicMock(spec=BaseRetriever)
+    agent = AgenticRAG(retriever=mock_retriever, llm_client=None)
+
+    variations = agent.expand_query("phương pháp đo diện tích vận tốc")
+    assert any("phuong phap do dien tich van toc" in v.lower() for v in variations)

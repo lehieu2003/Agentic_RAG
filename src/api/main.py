@@ -56,15 +56,18 @@ async def lifespan(app: FastAPI):
         except Exception:
             llm_client = None
 
+    active_model = settings.gemini_model if settings.llm_provider == "gemini" else None
     app.state.generator = RAGGenerator(
         llm_client=llm_client,
         provider=settings.llm_provider,
+        model_name=active_model,
         min_relevance_score=settings.min_relevance_score
     )
     app.state.agent = AgenticRAG(
         retriever=app.state.retriever,
         llm_client=llm_client,
         provider=settings.llm_provider,
+        model_name=active_model,
         min_relevance_score=settings.min_relevance_score
     )
 
