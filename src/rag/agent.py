@@ -1,16 +1,37 @@
-"""Agentic RAG Engine with Query Expansion, Multi-Query Retrieval, and Self-Correction."""
+"""LangGraph-powered Agentic RAG Engine with Query Expansion, Multi-Query Retrieval, and Self-Correction."""
 
 import re
 import unicodedata
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, TypedDict
+from langgraph.graph import StateGraph, START, END
+
 from src.models import Citation, DocumentChunk, QAResponse, RetrievalResult
 from src.rag.generator import RAGGenerator
 from src.rag.prompt import ABSTAIN_PHRASE
 from src.retrieval.base import BaseRetriever
 
 
+class AgentState(TypedDict, total=False):
+    """Execution state passed between nodes in the LangGraph agentic loop."""
+
+    question: str
+    top_k: int
+    is_chitchat: bool
+    chitchat_reply: Optional[str]
+    queries: List[str]
+    all_queries: List[str]
+    candidate_chunks: List[RetrievalResult]
+    relevant_chunks: List[RetrievalResult]
+    max_score: float
+    retries: int
+    abstained: bool
+    answer: str
+    citations: List[Citation]
+    reasoning_steps: List[str]
+
+
 class AgenticRAG:
-    """Autonomous RAG agent with query expansion, multi-query retrieval, self-reflection, and corrective re-querying."""
+    """LangGraph-driven Autonomous RAG agent with query expansion, multi-query retrieval, self-reflection, and corrective re-querying."""
 
     CHITCHAT_PATTERNS = [
         (
@@ -65,6 +86,9 @@ class AgenticRAG:
             model_name=self.model_name,
             min_relevance_score=min_relevance_score
         )
+
+        # Build and compile LangGraph StateGraph
+        self.app = self._build_graph()
 
     def _remove_accents(self, text: str) -> str:
         """Convert accented Vietnamese text to unaccented ASCII equivalent."""
@@ -247,78 +271,223 @@ class AgenticRAG:
         """Validate that citations in raw_output strictly correspond to retrieved chunks."""
         return self.generator.parse_llm_output(raw_output, retrieved_chunks)
 
-    def answer(self, question: str, top_k: int = 5) -> QAResponse:
-        """Execute agentic loop: query expansion, multi-query retrieval, self-reflection, and grounded generation."""
-        # 0. Chit-chat / Greeting Router: instantaneous response without DB query or abstention warning
-        chitchat_reply = self._detect_chitchat(question)
-        if chitchat_reply:
-            return QAResponse(
-                answer=chitchat_reply,
-                citations=[],
-                abstained=False,
-                retrieved_chunks=[],
-                rewritten_queries=[question],
-                reasoning_steps=["Nhận diện câu hỏi là lời chào hỏi / giao tiếp thông thường (Chit-chat Router)"]
-            )
+    # -------------------------------------------------------------------------
+    # LangGraph Nodes & Conditional Edges
+    # -------------------------------------------------------------------------
 
-        steps: List[str] = []
-        all_queries: List[str] = []
+    def _node_router(self, state: AgentState) -> Dict[str, Any]:
+        """Node 1: Detect greetings or system introductory queries."""
+        reply = self._detect_chitchat(state["question"])
+        if reply:
+            return {
+                "is_chitchat": True,
+                "chitchat_reply": reply,
+                "answer": reply,
+                "abstained": False,
+                "citations": [],
+                "candidate_chunks": [],
+                "all_queries": [state["question"]],
+                "reasoning_steps": ["Nhận diện câu hỏi là lời chào hỏi / giao tiếp thông thường (Chit-chat Router)"]
+            }
+        return {
+            "is_chitchat": False,
+            "reasoning_steps": [f"Tiếp nhận câu hỏi: '{state['question']}'"]
+        }
 
-        steps.append(f"Tiếp nhận câu hỏi: '{question}'")
+    def _route_after_router(self, state: AgentState) -> str:
+        """Conditional routing: terminate if chitchat, else proceed to query expansion."""
+        if state.get("is_chitchat"):
+            return END
+        return "expand_query"
 
-        # 1. Expand query into variations
-        expanded = self.expand_query(question)
+    def _node_expand_query(self, state: AgentState) -> Dict[str, Any]:
+        """Node 2: Expand query into multi-lingual / OCR-tolerant variations."""
+        expanded = self.expand_query(state["question"])
         if not expanded:
-            expanded = [question]
-        all_queries.extend(expanded)
+            expanded = [state["question"]]
+        steps = list(state.get("reasoning_steps", []))
         steps.append(f"Mở rộng truy vấn thành {len(expanded)} biến thể: {expanded}")
+        return {
+            "queries": expanded,
+            "all_queries": list(expanded),
+            "reasoning_steps": steps
+        }
 
-        # 2. Multi-query retrieval
-        candidate_chunks = self.multi_query_retrieve(expanded, top_k=top_k)
-        steps.append(f"Truy xuất được {len(candidate_chunks)} đoạn tài liệu ứng viên từ các truy vấn ban đầu")
+    def _node_retrieve(self, state: AgentState) -> Dict[str, Any]:
+        """Node 3: Execute multi-query retrieval and merge results."""
+        queries_to_run = state.get("queries", [state["question"]])
+        new_chunks = self.multi_query_retrieve(queries_to_run, top_k=state.get("top_k", 5))
+        existing = state.get("candidate_chunks", [])
+        merged = self._merge_chunks(existing + new_chunks, top_k=state.get("top_k", 5))
+        max_score = max((c.score for c in merged), default=0.0)
 
-        # 3. Self-reflection & Corrective Re-querying
-        max_score = max((c.score for c in candidate_chunks), default=0.0)
-        retries = 0
-        while max_score < self.min_relevance_score and retries < self.max_retries:
-            steps.append(
-                f"Điểm phù hợp cao nhất ({max_score:.2f}) thấp hơn ngưỡng ({self.min_relevance_score:.2f}). "
-                f"Kích hoạt viết lại truy vấn (Query Rewrite vòng {retries + 1})."
-            )
-            rewritten = self.rewrite_query(question, attempted_queries=all_queries)
-            all_queries.append(rewritten)
-            steps.append(f"Truy vấn viết lại: '{rewritten}'")
+        steps = list(state.get("reasoning_steps", []))
+        steps.append(f"Truy xuất được {len(merged)} đoạn tài liệu ứng viên (điểm cao nhất: {max_score:.2f})")
+        return {
+            "candidate_chunks": merged,
+            "max_score": max_score,
+            "reasoning_steps": steps
+        }
 
-            additional_chunks = self.multi_query_retrieve([rewritten], top_k=top_k)
-            steps.append(f"Truy xuất bổ sung được {len(additional_chunks)} đoạn tài liệu từ truy vấn viết lại")
+    def _route_after_retrieve(self, state: AgentState) -> str:
+        """Self-Reflection: check relevance threshold against min_relevance_score."""
+        max_score = state.get("max_score", 0.0)
+        if max_score >= self.min_relevance_score:
+            return "generate"
+        if state.get("retries", 0) < self.max_retries:
+            return "rewrite_query"
+        return "abstain"
 
-            candidate_chunks = self._merge_chunks(candidate_chunks + additional_chunks, top_k=top_k)
-            max_score = max((c.score for c in candidate_chunks), default=0.0)
-            retries += 1
+    def _node_rewrite_query(self, state: AgentState) -> Dict[str, Any]:
+        """Node 4: Corrective Query Rewrite when retrieval score is low."""
+        retries = state.get("retries", 0) + 1
+        rewritten = self.rewrite_query(state["question"], attempted_queries=state.get("all_queries", []))
+        all_q = list(state.get("all_queries", [])) + [rewritten]
 
-        # 4. Check if any chunks pass relevance threshold
-        relevant_chunks = [c for c in candidate_chunks if c.score >= self.min_relevance_score]
-        if not relevant_chunks:
+        steps = list(state.get("reasoning_steps", []))
+        steps.append(
+            f"Điểm phù hợp cao nhất ({state.get('max_score', 0.0):.2f}) thấp hơn ngưỡng ({self.min_relevance_score:.2f}). "
+            f"Kích hoạt viết lại truy vấn (Query Rewrite vòng {retries}): '{rewritten}'"
+        )
+        return {
+            "queries": [rewritten],
+            "all_queries": all_q,
+            "retries": retries,
+            "reasoning_steps": steps
+        }
+
+    def _node_generate(self, state: AgentState) -> Dict[str, Any]:
+        """Node 5: Synthesize grounded response using verified context chunks."""
+        candidates = state.get("candidate_chunks", [])
+        relevant = [c for c in candidates if c.score >= self.min_relevance_score]
+        steps = list(state.get("reasoning_steps", []))
+
+        if not relevant:
             steps.append(f"Không có đoạn tài liệu nào đạt ngưỡng tin cậy {self.min_relevance_score:.2f}. Từ chối trả lời (Abstain).")
-            return QAResponse(
-                answer=ABSTAIN_PHRASE,
-                citations=[],
-                abstained=True,
-                retrieved_chunks=candidate_chunks,
-                rewritten_queries=all_queries,
-                reasoning_steps=steps
-            )
+            return {
+                "answer": ABSTAIN_PHRASE,
+                "citations": [],
+                "abstained": True,
+                "relevant_chunks": [],
+                "reasoning_steps": steps
+            }
 
-        # 5. Synthesize grounded answer
-        steps.append(f"Tổng hợp câu trả lời từ {len(relevant_chunks)} đoạn tài liệu phù hợp")
-        response = self.generator.generate_answer(question, relevant_chunks)
+        steps.append(f"Tổng hợp câu trả lời từ {len(relevant)} đoạn tài liệu phù hợp")
+        resp = self.generator.generate_answer(state["question"], relevant)
 
-        if response.abstained:
+        if resp.abstained:
             steps.append("Bộ sinh câu trả lời từ chối do trích dẫn không có căn cứ hoặc thiếu dữ liệu")
         else:
-            steps.append(f"Hoàn thành câu trả lời với {len(response.citations)} trích dẫn hợp lệ")
+            steps.append(f"Hoàn thành câu trả lời với {len(resp.citations)} trích dẫn hợp lệ")
 
-        response.retrieved_chunks = candidate_chunks
-        response.rewritten_queries = all_queries
-        response.reasoning_steps = steps
-        return response
+        return {
+            "answer": resp.answer,
+            "citations": resp.citations,
+            "abstained": resp.abstained,
+            "relevant_chunks": relevant,
+            "reasoning_steps": steps
+        }
+
+    def _node_abstain(self, state: AgentState) -> Dict[str, Any]:
+        """Node 6: Explicit abstention guardrail to prevent hallucinations."""
+        steps = list(state.get("reasoning_steps", []))
+        steps.append(f"Không có đoạn tài liệu nào đạt ngưỡng tin cậy {self.min_relevance_score:.2f}. Từ chối trả lời (Abstain).")
+        return {
+            "answer": ABSTAIN_PHRASE,
+            "citations": [],
+            "abstained": True,
+            "relevant_chunks": [],
+            "reasoning_steps": steps
+        }
+
+    def _build_graph(self):
+        """Construct and compile the LangGraph StateGraph workflow."""
+        workflow = StateGraph(AgentState)
+
+        workflow.add_node("router", self._node_router)
+        workflow.add_node("expand_query", self._node_expand_query)
+        workflow.add_node("retrieve", self._node_retrieve)
+        workflow.add_node("rewrite_query", self._node_rewrite_query)
+        workflow.add_node("generate", self._node_generate)
+        workflow.add_node("abstain", self._node_abstain)
+
+        workflow.add_edge(START, "router")
+        workflow.add_conditional_edges(
+            "router",
+            self._route_after_router,
+            {"expand_query": "expand_query", END: END}
+        )
+        workflow.add_edge("expand_query", "retrieve")
+        workflow.add_conditional_edges(
+            "retrieve",
+            self._route_after_retrieve,
+            {
+                "generate": "generate",
+                "rewrite_query": "rewrite_query",
+                "abstain": "abstain"
+            }
+        )
+        workflow.add_edge("rewrite_query", "retrieve")
+        workflow.add_edge("generate", END)
+        workflow.add_edge("abstain", END)
+
+        return workflow.compile()
+
+    def draw_png(self, output_path: Optional[str] = "docs/langgraph_workflow.png") -> bytes:
+        """Export the compiled LangGraph StateGraph as a PNG diagram.
+
+        Uses LangGraph native draw_mermaid_png() with automatic mermaid.ink fallback.
+        """
+        try:
+            png_bytes = self.app.get_graph().draw_mermaid_png()
+        except Exception:
+            import base64
+            import httpx
+            mermaid_str = self.app.get_graph().draw_mermaid()
+            encoded = base64.urlsafe_b64encode(mermaid_str.encode("utf-8")).decode("ascii")
+            url = f"https://mermaid.ink/img/{encoded}"
+            with httpx.Client(timeout=15.0) as client:
+                r = client.get(url)
+                png_bytes = r.content
+
+        if output_path:
+            from pathlib import Path
+            p = Path(output_path)
+            p.parent.mkdir(parents=True, exist_ok=True)
+            p.write_bytes(png_bytes)
+
+        return png_bytes
+
+    def answer(self, question: str, top_k: int = 5) -> QAResponse:
+        """Execute the LangGraph workflow and return a structured QAResponse."""
+        initial_state: AgentState = {
+            "question": question,
+            "top_k": top_k,
+            "is_chitchat": False,
+            "chitchat_reply": None,
+            "queries": [],
+            "all_queries": [],
+            "candidate_chunks": [],
+            "relevant_chunks": [],
+            "max_score": 0.0,
+            "retries": 0,
+            "abstained": False,
+            "answer": "",
+            "citations": [],
+            "reasoning_steps": [],
+        }
+
+        final_state = self.app.invoke(initial_state)
+
+        all_queries = list(final_state.get("all_queries", []))
+        if not all_queries:
+            all_queries = [question]
+
+        return QAResponse(
+            answer=final_state.get("answer", ""),
+            citations=final_state.get("citations", []),
+            abstained=final_state.get("abstained", False),
+            retrieved_chunks=final_state.get("candidate_chunks", []),
+            rewritten_queries=all_queries,
+            reasoning_steps=final_state.get("reasoning_steps", [])
+        )
