@@ -1,0 +1,163 @@
+"""Tests for AgenticRAG: Query expansion, multi-query retrieval, self-correction, and citation grounding."""
+
+from unittest.mock import MagicMock
+import pytest
+from src.models import Citation, DocumentChunk, RetrievalResult
+from src.rag.prompt import ABSTAIN_PHRASE
+from src.retrieval.base import BaseRetriever
+from src.rag.agent import AgenticRAG
+
+
+def _create_chunk(doc_name: str, page_number: int, chunk_id: str, text: str, score: float, chunk_index: int = 0) -> RetrievalResult:
+    return RetrievalResult(
+        chunk=DocumentChunk(
+            chunk_id=chunk_id,
+            doc_name=doc_name,
+            page_number=page_number,
+            text=text,
+            metadata={"chunk_index": chunk_index}
+        ),
+        score=score
+    )
+
+
+def test_agent_query_expansion_generates_variations():
+    """Test expand_query('áp suất máy bơm') returns a list of 1-3 distinct formulations."""
+    mock_retriever = MagicMock(spec=BaseRetriever)
+    agent = AgenticRAG(retriever=mock_retriever, llm_client=None)
+
+    # 1. Deterministic / mock mode without LLM
+    variations = agent.expand_query("áp suất máy bơm")
+    assert isinstance(variations, list)
+    assert 1 <= len(variations) <= 3
+    assert len(set(variations)) == len(variations)  # All distinct
+    assert any("áp suất máy bơm" in v for v in variations)
+
+    # 2. LLM mode with mocked client
+    mock_llm = MagicMock()
+    mock_llm.models.generate_content.return_value.text = "áp suất tối đa máy bơm\ntiêu chuẩn áp lực bơm\náp lực làm việc của bơm"
+    agent_with_llm = AgenticRAG(retriever=mock_retriever, llm_client=mock_llm, provider="gemini")
+    llm_variations = agent_with_llm.expand_query("áp suất máy bơm")
+    assert isinstance(llm_variations, list)
+    assert 1 <= len(llm_variations) <= 3
+    assert len(set(llm_variations)) == len(llm_variations)
+    assert "áp suất tối đa máy bơm" in llm_variations
+
+
+def test_agent_multi_query_retrieval_deduplication():
+    """Mock retriever with overlapping chunks for 2 queries, verify chunks are merged and deduplicated."""
+    mock_retriever = MagicMock(spec=BaseRetriever)
+
+    chunk_a_low = _create_chunk("pump.pdf", 1, "c1", "Van an toàn mở ở 10 bar", score=0.70, chunk_index=0)
+    chunk_b = _create_chunk("pump.pdf", 2, "c2", "Công suất động cơ 15kW", score=0.60, chunk_index=1)
+    chunk_a_high = _create_chunk("pump.pdf", 1, "c1", "Van an toàn mở ở 10 bar", score=0.95, chunk_index=0)
+    chunk_c = _create_chunk("manual.pdf", 5, "c3", "Bảo dưỡng định kỳ 6 tháng", score=0.80, chunk_index=0)
+
+    def mock_search(query: str, top_k: int = 5):
+        if "thông số" in query:
+            return [chunk_a_high, chunk_c]
+        return [chunk_a_low, chunk_b]
+
+    mock_retriever.search.side_effect = mock_search
+
+    agent = AgenticRAG(retriever=mock_retriever, llm_client=None)
+    results = agent.multi_query_retrieve(["áp suất máy bơm", "áp suất máy bơm thông số"], top_k=5)
+
+    # Must be deduplicated: only 3 unique chunks (c1, c2, c3)
+    assert len(results) == 3
+
+    # Best score for chunk_a should be 0.95
+    c1_results = [r for r in results if r.chunk.chunk_id == "c1"]
+    assert len(c1_results) == 1
+    assert c1_results[0].score == 0.95
+
+    # Results must be sorted descending by score
+    scores = [r.score for r in results]
+    assert scores == sorted(scores, reverse=True)
+    assert scores == [0.95, 0.80, 0.60]
+
+
+def test_agent_self_reflection_triggers_query_rewrite_on_low_score():
+    """Mock retriever returning score < 0.45 on first query, verify rewrite_query is invoked and second search runs."""
+    mock_retriever = MagicMock(spec=BaseRetriever)
+
+    low_score_chunk = _create_chunk("pump.pdf", 1, "c1", "Thông tin chung", score=0.30)
+    high_score_chunk = _create_chunk("pump.pdf", 3, "c2", "Áp suất làm việc danh định 16 bar", score=0.88)
+
+    queries_searched = []
+
+    def mock_search(query: str, top_k: int = 5):
+        queries_searched.append(query)
+        if "nguyên lý" in query or "tổng quan" in query:
+            return [high_score_chunk]
+        return [low_score_chunk]
+
+    mock_retriever.search.side_effect = mock_search
+
+    agent = AgenticRAG(
+        retriever=mock_retriever,
+        llm_client=None,
+        min_relevance_score=0.45,
+        max_retries=1
+    )
+
+    response = agent.answer("áp suất danh định máy bơm", top_k=3)
+
+    # Verify query rewrite was triggered and searched
+    assert any("nguyên lý" in q or "tổng quan" in q for q in queries_searched)
+    assert response.abstained is False
+    assert len(response.citations) >= 1
+    assert response.citations[0].doc_name == "pump.pdf"
+    assert response.citations[0].page_number == 3
+    assert response.rewritten_queries is not None
+    assert len(response.rewritten_queries) > 1
+    assert response.reasoning_steps is not None
+    assert any("rewrite" in step.lower() or "thấp" in step.lower() or "below" in step.lower() for step in response.reasoning_steps)
+
+
+def test_agent_citation_grounding_preserves_valid_and_rejects_hallucinations():
+    """Verify that synthesized answer citations are strictly verified against retrieved chunks."""
+    mock_retriever = MagicMock(spec=BaseRetriever)
+    retrieved_chunk = _create_chunk("pump.pdf", 5, "c1", "Nhiệt độ tối đa 80 độ C.", score=0.90)
+    mock_retriever.search.return_value = [retrieved_chunk]
+
+    agent = AgenticRAG(retriever=mock_retriever, llm_client=None, min_relevance_score=0.45)
+
+    # 1. Valid citation matching pump.pdf p.5 and hallucinated citation pointing to ghost_manual.pdf p.99
+    raw_mixed = (
+        "Nhiệt độ tối đa là 80 độ C [Tài liệu: pump.pdf, Trang 5]. "
+        "Ngoài ra van phụ trợ chịu 120 độ C [Tài liệu: ghost_manual.pdf, Trang 99]."
+    )
+    validated = agent.validate_citations(raw_mixed, [retrieved_chunk])
+    assert validated.abstained is False
+    assert len(validated.citations) == 1
+    assert validated.citations[0].doc_name == "pump.pdf"
+    assert validated.citations[0].page_number == 5
+
+    # 2. Fully hallucinated citation triggers abstention
+    raw_hallucinated = "Thông số bịa đặt [Tài liệu: ghost_manual.pdf, Trang 99]."
+    validated_hallucinated = agent.validate_citations(raw_hallucinated, [retrieved_chunk])
+    assert validated_hallucinated.abstained is True
+    assert ABSTAIN_PHRASE in validated_hallucinated.answer
+    assert len(validated_hallucinated.citations) == 0
+
+
+def test_agent_abstains_when_no_relevant_data_found():
+    """Test question with zero relevant chunks yields abstained=True."""
+    mock_retriever = MagicMock(spec=BaseRetriever)
+    # Return only irrelevant low-scoring chunk for all attempts
+    irrelevant_chunk = _create_chunk("other.pdf", 10, "c9", "Nội dung không liên quan", score=0.20)
+    mock_retriever.search.return_value = [irrelevant_chunk]
+
+    agent = AgenticRAG(
+        retriever=mock_retriever,
+        llm_client=None,
+        min_relevance_score=0.45,
+        max_retries=1
+    )
+
+    response = agent.answer("câu hỏi về công nghệ vũ trụ NASA", top_k=3)
+    assert response.abstained is True
+    assert ABSTAIN_PHRASE in response.answer
+    assert len(response.citations) == 0
+    assert response.reasoning_steps is not None

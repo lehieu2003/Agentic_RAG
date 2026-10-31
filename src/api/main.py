@@ -7,6 +7,7 @@ from src.api.routes import router
 from src.config import settings
 from src.ingestion.ocr_engine import OcrEngine
 from src.rag.generator import RAGGenerator
+from src.rag.agent import AgenticRAG
 from src.retrieval.local import LocalRetriever
 from src.vector_store.embedding import EmbeddingModel
 from src.vector_store.qdrant_store import QdrantVectorStore
@@ -56,6 +57,12 @@ async def lifespan(app: FastAPI):
             llm_client = None
 
     app.state.generator = RAGGenerator(
+        llm_client=llm_client,
+        provider=settings.llm_provider,
+        min_relevance_score=settings.min_relevance_score
+    )
+    app.state.agent = AgenticRAG(
+        retriever=app.state.retriever,
         llm_client=llm_client,
         provider=settings.llm_provider,
         min_relevance_score=settings.min_relevance_score

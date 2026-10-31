@@ -11,6 +11,7 @@ from src.config import settings
 from src.ingestion.chunker import chunk_document
 from src.ingestion.document_extractor import extract_pages_from_document
 from src.models import FileSummary, QARequest, QAResponse, UploadResponse
+from src.rag.agent import AgenticRAG
 
 router = APIRouter(prefix="/api/v1")
 
@@ -203,14 +204,24 @@ def query_assistant(
     """
     retriever = getattr(request.app.state, "retriever", None)
     generator = getattr(request.app.state, "generator", None)
+    agent_instance = getattr(request.app.state, "agent", None)
 
-    if retriever is None or generator is None:
+    if retriever is None or (generator is None and agent_instance is None):
         raise HTTPException(status_code=503, detail="RAG system not initialized.")
 
+    llm_client = getattr(agent_instance, "llm_client", getattr(generator, "llm_client", None))
+    provider = getattr(agent_instance, "provider", getattr(generator, "provider", settings.llm_provider))
+
+    agent = AgenticRAG(
+        retriever=retriever,
+        llm_client=llm_client,
+        provider=provider,
+        min_relevance_score=settings.min_relevance_score
+    )
+
     try:
-        chunks = retriever.search(qa_request.question, top_k=qa_request.top_k)
+        response = agent.answer(qa_request.question, top_k=qa_request.top_k)
     except Exception as e:
         raise HTTPException(status_code=503, detail=f"Retrieval failure: {str(e)}")
 
-    response = generator.generate_answer(qa_request.question, chunks)
     return response

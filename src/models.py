@@ -84,4 +84,6 @@ class QAResponse(BaseModel):
     citations: List[Citation] = Field(default_factory=list)
     abstained: bool = False
     retrieved_chunks: List[RetrievalResult] = Field(default_factory=list)
+    rewritten_queries: Optional[List[str]] = None
+    reasoning_steps: Optional[List[str]] = None
 
