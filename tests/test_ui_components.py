@@ -226,6 +226,129 @@ def test_render_sidebar_upload_total_failure(
     )
 
 
+def test_format_citation_badge_renders_clickable_html_link():
+    badge = format_citation_badge("manual.pdf", 3, api_base_url="http://localhost:8000")
+    assert '<a href="http://localhost:8000/api/v1/files/manual.pdf#page=3"' in badge
+    assert 'target="_blank"' in badge
+    assert 'class="citation-badge"' in badge
+    assert 'title="Mở manual.pdf tại trang 3"' in badge
+    assert "📄 manual.pdf (Trang 3) ↗" in badge
+
+
+@patch("streamlit.sidebar")
+@patch("streamlit.status")
+@patch("streamlit.button")
+@patch("streamlit.slider")
+@patch("streamlit.file_uploader")
+@patch("streamlit.columns")
+@patch("streamlit.info")
+@patch("streamlit.error")
+def test_render_sidebar_handles_already_exists_status(
+    mock_error, mock_info, mock_columns, mock_uploader, mock_slider, mock_button, mock_status, mock_sidebar
+):
+    from src.ui.components.sidebar import render_sidebar
+    mock_client = MagicMock()
+    mock_client.check_health.return_value = {"status": "ok"}
+    mock_client.list_files.return_value = [{"filename": "doc1.pdf", "size_bytes": 1024}]
+    mock_client.upload_document.return_value = {
+        "filename": "doc1.pdf",
+        "status": "already_exists",
+        "message": "Tài liệu 'doc1.pdf' đã tồn tại trên hệ thống. Bỏ qua nạp trùng lặp.",
+    }
+    mock_slider.return_value = 3
+    mock_button.return_value = True
+
+    mock_file = MagicMock()
+    mock_file.name = "doc1.pdf"
+    mock_file.getvalue.return_value = b"test content"
+    mock_uploader.return_value = [mock_file]
+
+    mock_status_ctx = MagicMock()
+    mock_status.return_value.__enter__.return_value = mock_status_ctx
+    mock_columns.return_value = [MagicMock(), MagicMock(), MagicMock()]
+
+    res = render_sidebar(mock_client)
+
+    assert res["uploaded"] is True
+    mock_error.assert_not_called()
+    assert mock_info.call_count >= 1
+    info_args, _ = mock_info.call_args
+    assert "tồn tại" in info_args[0].lower()
+
+
+def test_api_client_list_files():
+    from src.ui.api_client import ApiClient
+    client = ApiClient(base_url="http://localhost:8000/api/v1")
+
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = [
+        {"filename": "doc1.pdf", "size_bytes": 1024, "uploaded_at": "2026-10-31T00:00:00Z", "file_type": ".pdf"}
+    ]
+
+    with patch("httpx.Client.get", return_value=mock_resp):
+        files = client.list_files()
+        assert len(files) == 1
+        assert files[0]["filename"] == "doc1.pdf"
+
+    with patch("httpx.Client.get", side_effect=Exception("Connection refused")):
+        files = client.list_files()
+        assert files == []
+
+
+def test_render_evidence_expander_with_links():
+    with patch("streamlit.expander") as mock_expander, \
+         patch("streamlit.markdown") as mock_markdown, \
+         patch("streamlit.caption"):
+        mock_expander.return_value.__enter__.return_value = MagicMock()
+        chunks = [
+            RetrievalResult(
+                chunk=DocumentChunk(
+                    chunk_id="c1",
+                    doc_name="manual.pdf",
+                    page_number=5,
+                    text="Page 5 content",
+                ),
+                score=0.92,
+            )
+        ]
+        render_evidence_expander(chunks, api_base_url="http://localhost:8000")
+
+        markdown_calls = [call.args[0] for call in mock_markdown.call_args_list if call.args]
+        assert any("http://localhost:8000/api/v1/files/manual.pdf#page=5" in m for m in markdown_calls)
+
+
+@patch("streamlit.sidebar")
+@patch("streamlit.expander")
+@patch("streamlit.button")
+@patch("streamlit.slider")
+@patch("streamlit.file_uploader")
+@patch("streamlit.markdown")
+def test_render_sidebar_displays_stored_files(
+    mock_markdown, mock_uploader, mock_slider, mock_button, mock_expander, mock_sidebar
+):
+    from src.ui.components.sidebar import render_sidebar
+    mock_client = MagicMock()
+    mock_client.check_health.return_value = {"status": "ok"}
+    mock_client.list_files.return_value = [
+        {"filename": "guide.pdf", "size_bytes": 2048 * 1024},
+        {"filename": "specs.txt", "size_bytes": 500},
+    ]
+    mock_uploader.return_value = None
+    mock_slider.return_value = 3
+    mock_button.return_value = False
+    mock_expander.return_value.__enter__.return_value = MagicMock()
+
+    render_sidebar(mock_client)
+
+    mock_expander.assert_any_call("📚 Tài liệu đã nạp trên hệ thống", expanded=False)
+    markdown_texts = [call.args[0] for call in mock_markdown.call_args_list if call.args]
+    assert any("guide.pdf" in m and "2.0 MB" in m for m in markdown_texts)
+    assert any("specs.txt" in m and "500 B" in m for m in markdown_texts)
+
+
+
+
 
 
 

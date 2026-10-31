@@ -80,7 +80,7 @@ def main() -> None:
             if role == "user":
                 st.markdown(msg.get("content", ""))
             else:
-                render_assistant_message(msg)
+                render_assistant_message(msg, api_base_url=api_base_url)
 
     # Handle Input (User chat_input or suggestion click)
     prompt = None
@@ -104,7 +104,7 @@ def main() -> None:
                 try:
                     top_k = sidebar_state.get("top_k", 3)
                     response = api_client.query(prompt, top_k=top_k)
-                    render_assistant_message(response)
+                    render_assistant_message(response, api_base_url=api_base_url)
                     st.session_state["messages"].append({
                         "role": "assistant",
                         "content": response.answer,

@@ -45,6 +45,33 @@ def render_sidebar(api_client: ApiClient) -> Dict[str, Any]:
                 "```bash\n.venv/bin/uvicorn src.api.main:app --port 8000\n```"
             )
 
+        # Stored Documents Section
+        try:
+            files_list = api_client.list_files()
+        except Exception:
+            files_list = []
+
+        with st.expander("📚 Tài liệu đã nạp trên hệ thống", expanded=False):
+            if isinstance(files_list, list) and len(files_list) > 0:
+                for f_info in files_list:
+                    if isinstance(f_info, dict):
+                        fname = f_info.get("filename", "unknown")
+                        fsize = f_info.get("size_bytes", 0)
+                        if isinstance(fsize, (int, float)):
+                            if fsize >= 1024 * 1024:
+                                size_str = f"{fsize / (1024 * 1024):.1f} MB"
+                            elif fsize >= 1024:
+                                size_str = f"{fsize / 1024:.1f} KB"
+                            else:
+                                size_str = f"{fsize} B"
+                        else:
+                            size_str = str(fsize)
+                        st.markdown(f"📄 **{fname}** (`{size_str}`)")
+                    else:
+                        st.markdown(f"📄 **{f_info}**")
+            else:
+                st.caption("Chưa có tài liệu nào")
+
         st.divider()
 
         # Search Depth Configuration
@@ -85,6 +112,11 @@ def render_sidebar(api_client: ApiClient) -> Dict[str, Any]:
                         try:
                             file_bytes = file.getvalue()
                             resp = api_client.upload_document(file_bytes, file.name)
+                            if resp.get("status") == "already_exists":
+                                st.info(f"ℹ️ {file.name}: {resp.get('message', 'Đã tồn tại')}")
+                                success_count += 1
+                                continue
+
                             pages = resp.get("pages_extracted") or resp.get("pages_processed", 0)
                             pages_digital = resp.get("pages_digital", pages)
                             pages_scanned = resp.get("pages_scanned_ocr", 0)

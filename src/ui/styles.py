@@ -173,7 +173,7 @@ div[data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarAssistant"
 }
 
 /* ============================================================
-   Citation Chips & Evidence Expander
+   Citation Chips, Badges & Evidence Expander
    ============================================================ */
 .citation-container {
     display: flex;
@@ -183,7 +183,8 @@ div[data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarAssistant"
     margin-bottom: 6px;
 }
 
-.citation-chip {
+.citation-chip,
+.citation-badge {
     display: inline-flex;
     align-items: center;
     gap: 6px;
@@ -194,12 +195,17 @@ div[data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarAssistant"
     color: #10a37f !important;
     font-size: 13px;
     font-weight: 500;
-    transition: all 0.2s ease;
+    text-decoration: none !important;
+    cursor: pointer;
+    transition: all 0.2s ease-in-out;
 }
 
-.citation-chip:hover {
+.citation-chip:hover,
+.citation-badge:hover {
     background-color: #2e2e2e;
     border-color: #10a37f;
+    color: #10a37f !important;
+    text-decoration: underline !important;
 }
 
 [data-testid="stExpander"] {

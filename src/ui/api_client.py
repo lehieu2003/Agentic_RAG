@@ -1,7 +1,7 @@
 """API Client wrapper communicating with FastAPI backend."""
 
 import mimetypes
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 import httpx
 from src.models import QAResponse
 
@@ -33,6 +33,24 @@ class ApiClient:
                 return None
         except Exception:
             return None
+
+    def list_files(self) -> List[Dict[str, Any]]:
+        """List all permanently stored documents on the server.
+
+        Returns:
+            List of file metadata dicts, or empty list if request fails.
+        """
+        try:
+            url = f"{self.base_url}/files" if self.base_url.endswith("/api/v1") else f"{self.base_url}/api/v1/files"
+            with httpx.Client(timeout=self.timeout) as client:
+                resp = client.get(url)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    if isinstance(data, list):
+                        return data
+                return []
+        except Exception:
+            return []
 
     def upload_document(
         self,
