@@ -13,11 +13,10 @@ if str(PROJECT_ROOT) not in sys.path:
 import streamlit as st
 
 from src.ui.api_client import ApiClient
-from src.ui.components.chat import (
-    PROMPT_SUGGESTIONS,
-    render_assistant_message,
-)
+from src.ui.components.chat import render_assistant_message
 from src.ui.components.sidebar import render_sidebar
+from src.ui.styles import CHATGPT_CUSTOM_CSS
+
 
 
 
@@ -46,6 +45,9 @@ def main() -> None:
 
     init_session_state(st.session_state)
 
+    # Inject ChatGPT styling
+    st.markdown(CHATGPT_CUSTOM_CSS, unsafe_allow_html=True)
+
     api_base_url = os.environ.get("API_BASE_URL", "http://localhost:8000/api/v1")
     api_client = ApiClient(base_url=api_base_url)
 
@@ -55,32 +57,26 @@ def main() -> None:
         reset_session_state(st.session_state)
         st.rerun()
 
-    # Empty State & Prompt Suggestions
+    # Empty State Hero (ChatGPT Minimalist Greeting - No prompt suggestions)
     if not st.session_state["messages"]:
         st.markdown(
             """
-            <div style="text-align: center; padding: 40px 0 20px 0;">
-                <h1 style="font-size: 2.2rem; margin-bottom: 8px;">🤖 Document Q&A Assistant</h1>
-                <p style="color: #6c757d; font-size: 1.1rem; max-width: 650px; margin: 0 auto;">
-                    Hỏi đáp thông minh dựa trên tài liệu kỹ thuật đã nạp. Mọi câu trả lời đều kèm trích dẫn chính xác và minh bạch.
-                </p>
+            <div class="gpt-hero-container">
+                <div class="gpt-hero-icon">🤖</div>
+                <div class="gpt-hero-title">Tôi có thể giúp gì cho bạn hôm nay?</div>
+                <div class="gpt-hero-subtitle">
+                    Hỏi bất kỳ điều gì về thông số kỹ thuật, quy trình bảo dưỡng hoặc cách xử lý sự cố từ các tài liệu PDF đã nạp.
+                </div>
             </div>
             """,
             unsafe_allow_html=True,
         )
 
-        st.markdown("#### 💡 Gợi ý câu hỏi bắt đầu")
-        cols = st.columns(len(PROMPT_SUGGESTIONS))
-        for idx, (col, suggestion) in enumerate(zip(cols, PROMPT_SUGGESTIONS)):
-            with col:
-                if st.button(f"📌 {suggestion}", key=f"sug_{idx}", use_container_width=True):
-                    st.session_state["pending_prompt"] = suggestion
-                    st.rerun()
-
     # Render Chat History
     for msg in st.session_state["messages"]:
         role = msg.get("role", "user")
-        with st.chat_message(role):
+        avatar = "👤" if role == "user" else "🤖"
+        with st.chat_message(role, avatar=avatar):
             if role == "user":
                 st.markdown(msg.get("content", ""))
             else:
@@ -99,11 +95,11 @@ def main() -> None:
     if prompt:
         # 1. Add and render user message
         st.session_state["messages"].append({"role": "user", "content": prompt})
-        with st.chat_message("user"):
+        with st.chat_message("user", avatar="👤"):
             st.markdown(prompt)
 
         # 2. Query backend and render assistant response
-        with st.chat_message("assistant"):
+        with st.chat_message("assistant", avatar="🤖"):
             with st.spinner("Đang tìm kiếm tài liệu và sinh câu trả lời..."):
                 try:
                     top_k = sidebar_state.get("top_k", 3)

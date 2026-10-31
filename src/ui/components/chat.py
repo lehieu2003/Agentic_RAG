@@ -33,8 +33,8 @@ def render_citation_badges(citations: List[Union[Citation, dict]]) -> None:
         return
 
     st.markdown("##### 📚 Nguồn trích dẫn")
-    badges = " &nbsp; ".join([f"`{format_citation_badge(c)}`" for c in citations])
-    st.markdown(badges)
+    chips = "".join([f'<span class="citation-chip">{format_citation_badge(c)}</span>' for c in citations])
+    st.markdown(f'<div class="citation-container">{chips}</div>', unsafe_allow_html=True)
 
 
 def render_evidence_expander(chunks: List[Union[RetrievalResult, dict]]) -> None:
@@ -58,8 +58,8 @@ def render_evidence_expander(chunks: List[Union[RetrievalResult, dict]]) -> None
             else:
                 continue
 
-            score_label = f"{score:.3f}" if isinstance(score, (int, float)) else str(score)
-            st.markdown(f"**#{idx}** `{doc_name}` (Trang {page_number}) — *Score:* `{score_label}`")
+            score_pct = f"{score * 100:.1f}%" if isinstance(score, (int, float)) else str(score)
+            st.markdown(f"**#{idx}** `{doc_name}` (Trang {page_number}) &nbsp;·&nbsp; 🎯 *Độ tương đồng:* `{score_pct}`")
             st.caption(text)
             if idx < len(chunks):
                 st.divider()
