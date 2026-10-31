@@ -192,6 +192,42 @@ def list_files(request: Request) -> List[FileSummary]:
     return files
 
 
+@router.api_route(
+    "/files/{filename:path}",
+    methods=["GET", "HEAD"],
+    tags=["Quản lý tài liệu (Files)"],
+    summary="Tải hoặc xem trực tiếp tài liệu gốc trên trình duyệt"
+)
+async def serve_file(filename: str):
+    """Phục vụ file tài liệu gốc để xem trực tiếp trên tab trình duyệt (hỗ trợ #page=N cho PDF)."""
+    raw_name = Path(filename).name
+    if not raw_name or raw_name in {".", ".."}:
+        raise HTTPException(status_code=404, detail="File not found")
+
+    safe_filename = unicodedata.normalize("NFC", raw_name)
+    upload_dir = _get_upload_dir()
+    file_path = (upload_dir / safe_filename).resolve()
+
+    if not file_path.is_file():
+        for cand in upload_dir.iterdir():
+            if cand.is_file() and unicodedata.normalize("NFC", cand.name) == safe_filename:
+                file_path = cand.resolve()
+                break
+
+    if not file_path.is_file() or not file_path.is_relative_to(upload_dir.resolve()):
+        raise HTTPException(status_code=404, detail="File not found")
+
+    mime_type, _ = mimetypes.guess_type(str(file_path))
+    mime_type = mime_type or "application/octet-stream"
+
+    return FileResponse(
+        path=str(file_path),
+        media_type=mime_type,
+        filename=safe_filename,
+        content_disposition_type="inline"
+    )
+
+
 @router.delete(
     "/files/{filename:path}",
     tags=["Quản lý tài liệu (Files)"],
@@ -233,40 +269,6 @@ def delete_document(request: Request, filename: str) -> Dict[str, Any]:
         "chunks_removed": deleted_chunks,
         "message": f"Đã xoá hoàn toàn tài liệu '{safe_filename}' khỏi hệ thống."
     }
-
-
-@router.get(
-    "/files/{filename:path}",
-    tags=["Quản lý tài liệu (Files)"],
-    summary="Tải hoặc xem trực tiếp tài liệu gốc trên trình duyệt"
-)
-async def serve_file(filename: str):
-    """Phục vụ file tài liệu gốc để xem trực tiếp trên tab trình duyệt (hỗ trợ #page=N cho PDF)."""
-    raw_name = Path(filename).name
-    if not raw_name or raw_name in {".", ".."}:
-        raise HTTPException(status_code=404, detail="File not found")
-
-    safe_filename = unicodedata.normalize("NFC", raw_name)
-    upload_dir = _get_upload_dir()
-    file_path = (upload_dir / safe_filename).resolve()
-
-    if not file_path.is_file():
-        for cand in upload_dir.iterdir():
-            if cand.is_file() and unicodedata.normalize("NFC", cand.name) == safe_filename:
-                file_path = cand.resolve()
-                break
-
-    if not file_path.is_file() or not file_path.is_relative_to(upload_dir.resolve()):
-        raise HTTPException(status_code=404, detail="File not found")
-
-    mime_type, _ = mimetypes.guess_type(str(file_path))
-    mime_type = mime_type or "application/octet-stream"
-
-    return FileResponse(
-        path=str(file_path),
-        media_type=mime_type,
-        headers={"Content-Disposition": f'inline; filename="{safe_filename}"'}
-    )
 
 
 @router.post(

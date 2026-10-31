@@ -156,3 +156,22 @@ def test_delete_file_endpoint(client, tmp_path):
     list_resp = client.get("/api/v1/files")
     filenames = [f["filename"] for f in list_resp.json()]
     assert "to_delete.txt" not in filenames
+
+
+def test_serve_file_vietnamese_unicode_headers(client):
+    import urllib.parse
+    pdf_bytes = _make_pdf("Tài liệu tiếng Việt có dấu.")
+    filename = "Tài liệu kỹ thuật - Hướng dẫn.pdf"
+
+    upload_resp = client.post(
+        "/api/v1/upload",
+        files={"file": (filename, io.BytesIO(pdf_bytes), "application/pdf")}
+    )
+    assert upload_resp.status_code == 200
+
+    quoted = urllib.parse.quote(filename)
+    resp = client.get(f"/api/v1/files/{quoted}")
+    assert resp.status_code == 200
+    assert "application/pdf" in resp.headers.get("content-type", "")
+    assert "inline" in resp.headers.get("content-disposition", "")
+    assert resp.content == pdf_bytes
