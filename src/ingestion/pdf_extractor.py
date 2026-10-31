@@ -2,6 +2,7 @@
 
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+import unicodedata
 import pymupdf
 
 
@@ -31,7 +32,7 @@ def extract_pages_from_pdf(
     if not path.exists():
         raise FileNotFoundError(f"PDF file not found: {pdf_path}")
 
-    doc_name = path.name
+    doc_name = unicodedata.normalize("NFC", path.name)
     results: List[Dict[str, Any]] = []
 
     doc = pymupdf.open(str(path))

@@ -2,6 +2,7 @@
 
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+import unicodedata
 import docx
 
 from src.ingestion.pdf_extractor import extract_pages_from_pdf
@@ -45,7 +46,7 @@ def _segment_text(text: str, logical_page_size: int = 2000) -> List[str]:
 
 def _extract_txt(path: Path, logical_page_size: int = 2000) -> List[Dict[str, Any]]:
     """Extract text from plain text file with logical page segmentation."""
-    doc_name = path.name
+    doc_name = unicodedata.normalize("NFC", path.name)
     try:
         try:
             full_text = path.read_text(encoding="utf-8")
@@ -82,7 +83,7 @@ def _extract_txt(path: Path, logical_page_size: int = 2000) -> List[Dict[str, An
 
 def _extract_docx(path: Path, logical_page_size: int = 2000) -> List[Dict[str, Any]]:
     """Extract text from DOCX file including paragraphs and tables."""
-    doc_name = path.name
+    doc_name = unicodedata.normalize("NFC", path.name)
     try:
         doc = docx.Document(str(path))
         text_parts: List[str] = []
@@ -130,7 +131,7 @@ def _extract_image(
     ocr_engine: Optional[Any] = None
 ) -> List[Dict[str, Any]]:
     """Extract text from image file using OCR."""
-    doc_name = path.name
+    doc_name = unicodedata.normalize("NFC", path.name)
     try:
         image_bytes = path.read_bytes()
         extracted_text = ""

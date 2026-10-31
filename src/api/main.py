@@ -115,10 +115,12 @@ async def lifespan(app: FastAPI):
             for file_path in sorted(upload_dir.iterdir(), key=lambda p: p.name.lower()):
                 if file_path.is_file() and not file_path.name.startswith("."):
                     try:
+                        import unicodedata
                         pages = extract_pages_from_document(str(file_path), ocr_engine=app.state.ocr_engine)
+                        nfc_doc_name = unicodedata.normalize("NFC", file_path.name)
                         for p in pages:
-                            p["doc_name"] = file_path.name
-                        chunks = chunk_document(pages)
+                            p["doc_name"] = nfc_doc_name
+                        chunks = chunk_document(pages, chunk_size=settings.chunk_size, chunk_overlap=settings.chunk_overlap)
                         bm25_retriever.index_chunks(chunks)
                     except Exception:
                         pass

@@ -27,3 +27,23 @@ def test_chunk_preserves_page_metadata():
     chunk_ids = [c.chunk_id for c in chunks]
     assert len(chunk_ids) == len(set(chunk_ids))
 
+
+def test_chunk_preserves_sentence_boundaries_and_nfc_doc_name():
+    import unicodedata
+    nfd_name = unicodedata.normalize("NFD", "Tài liệu kỹ thuật.pdf")
+    pages = [
+        {
+            "doc_name": nfd_name,
+            "page_number": 1,
+            "text": "Câu thứ nhất rất quan trọng. Câu thứ hai giải thích định nghĩa chi tiết. Câu thứ ba tổng kết."
+        }
+    ]
+    chunks = chunk_document(pages, chunk_size=50, chunk_overlap=15)
+    assert len(chunks) >= 2
+    # Ensure doc_name is normalized to NFC
+    assert unicodedata.is_normalized("NFC", chunks[0].doc_name)
+    # Ensure words are not chopped in half at the beginning of overlapped chunks
+    for c in chunks:
+        assert not c.text.startswith(" ")
+        assert not c.text.endswith(" ")
+

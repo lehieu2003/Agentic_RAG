@@ -71,8 +71,13 @@ class BM25Retriever(BaseRetriever):
 
     def delete_by_doc_name(self, doc_name: str) -> int:
         """Delete all chunks belonging to doc_name and rebuild BM25 index."""
+        import unicodedata
+        nfc_target = unicodedata.normalize("NFC", doc_name)
         initial_len = len(self.chunks)
-        self.chunks = [c for c in self.chunks if c.doc_name != doc_name]
+        self.chunks = [
+            c for c in self.chunks
+            if unicodedata.normalize("NFC", c.doc_name) != nfc_target
+        ]
         deleted_count = initial_len - len(self.chunks)
         if self.chunks:
             tokenized_corpus = [self.tokenize(c.text) for c in self.chunks]
@@ -88,7 +93,8 @@ class BM25Retriever(BaseRetriever):
 
     def get_indexed_doc_names(self) -> set:
         """Return distinct document names currently indexed."""
-        return {c.doc_name for c in self.chunks if c.doc_name}
+        import unicodedata
+        return {unicodedata.normalize("NFC", c.doc_name) for c in self.chunks if c.doc_name}
 
     def search(self, query: str, top_k: int = 10) -> List[RetrievalResult]:
         """Search for top_k relevant DocumentChunks matching the query.

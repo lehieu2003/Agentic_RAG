@@ -26,6 +26,8 @@ class Settings(BaseSettings):
     hybrid_rrf_k: int = 60
     hybrid_candidate_top_k: int = 20
     rerank_top_k: int = 5
+    chunk_size: int = 1200
+    chunk_overlap: int = 200
 
     model_config = SettingsConfigDict(
         env_file=".env",

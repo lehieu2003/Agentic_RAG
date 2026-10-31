@@ -69,3 +69,33 @@ def test_abstention_on_low_relevance_query():
     response = gen.generate_answer("Giá cổ phiếu Apple hôm nay?", low_score_chunk)
     assert response.abstained is True
     assert ABSTAIN_PHRASE in response.answer
+
+
+def test_citation_unicode_normalization_and_flexible_matching():
+    import unicodedata
+    # NFD decomposed doc_name as saved by MacOS APFS
+    nfd_name = unicodedata.normalize("NFD", "#19 - GraphRAG - Từ văn bản tới Knowledge Graph.pdf")
+    chunk = RetrievalResult(
+        chunk=DocumentChunk(chunk_id="c1", doc_name=nfd_name, page_number=4, text="GraphRAG definition"),
+        score=0.95
+    )
+    gen = RAGGenerator(llm_client=None)
+
+    # 1. NFC citation format
+    raw_nfc = "GraphRAG bổ sung cấu trúc đồ thị [Tài liệu: #19 - GraphRAG - Từ văn bản tới Knowledge Graph.pdf, Trang 4]."
+    resp1 = gen.parse_llm_output(raw_nfc, retrieved_chunks=[chunk])
+    assert resp1.abstained is False
+    assert len(resp1.citations) == 1
+    assert resp1.citations[0].page_number == 4
+
+    # 2. Omitted prefix
+    raw_no_prefix = "GraphRAG [Tài liệu: GraphRAG - Từ văn bản tới Knowledge Graph.pdf, Trang 4]."
+    resp2 = gen.parse_llm_output(raw_no_prefix, retrieved_chunks=[chunk])
+    assert resp2.abstained is False
+    assert len(resp2.citations) == 1
+
+    # 3. Omitted extension and different separator syntax
+    raw_no_ext = "GraphRAG [Tài liệu: #19 - GraphRAG - Từ văn bản tới Knowledge Graph | Trang: 4]."
+    resp3 = gen.parse_llm_output(raw_no_ext, retrieved_chunks=[chunk])
+    assert resp3.abstained is False
+    assert len(resp3.citations) == 1

@@ -454,7 +454,10 @@ class AgenticRAG:
                 f"Bạn là chuyên gia đánh giá ngữ cảnh tài liệu cho hệ thống RAG kỹ thuật (Context Sufficiency Grader).\n"
                 f"Câu hỏi của người dùng: '{clean_q}'\n\n"
                 f"Các đoạn trích dẫn tài liệu tìm được:\n{context_text}\n\n"
-                f"Nhiệm vụ: Hãy phân tích xem các đoạn trích trên có chứa ĐỦ thông tin và căn cứ thực tế để trả lời chính xác, đầy đủ cho câu hỏi hay không.\n"
+                f"Nhiệm vụ: Hãy phân tích xem các đoạn trích trên có chứa thông tin hoặc căn cứ thực tế để trả lời cho câu hỏi hay không "
+                f"(bao gồm định nghĩa cốt lõi, khái niệm, nguyên lý, thông số hoặc hướng dẫn trong tài liệu). "
+                f"Nếu có căn cứ để trả lời câu hỏi, hãy đánh giá is_sufficient: true. "
+                f"Chỉ trả về is_sufficient: false khi các đoạn trích hoàn toàn không chứa thông tin hoặc lệch chủ đề so với câu hỏi.\n"
                 f"Trả về kết quả dưới dạng JSON duy nhất với cấu trúc:\n"
                 f'{{"is_sufficient": true/false, "missing_aspects": "Mô tả ngắn gọn khía cạnh còn thiếu nếu false, hoặc rỗng nếu true"}}\n'
                 f"Chỉ trả về JSON, không giải thích thêm."

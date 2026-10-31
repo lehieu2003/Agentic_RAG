@@ -1,12 +1,13 @@
 """Text chunker that splits document pages while preserving page numbers and metadata."""
 
 import hashlib
+import unicodedata
 from typing import Any, Dict, List
 from src.models import DocumentChunk
 
 
-def _split_text_with_overlap(text: str, chunk_size: int = 500, chunk_overlap: int = 50) -> List[str]:
-    """Split a single string into overlapping chunks respecting word boundaries."""
+def _split_text_with_overlap(text: str, chunk_size: int = 1200, chunk_overlap: int = 200) -> List[str]:
+    """Split a single string into overlapping chunks respecting natural boundaries (paragraphs, sentences)."""
     text = text.strip()
     if not text:
         return []
@@ -18,6 +19,9 @@ def _split_text_with_overlap(text: str, chunk_size: int = 500, chunk_overlap: in
     start = 0
     text_len = len(text)
 
+    # Priority of natural text separators: paragraphs first, then sentence ends, then lines, then words
+    separators = ["\n\n", ".\n", ".\r\n", ". ", "?\n", "? ", "!\n", "! ", ";\n", "\n", " "]
+
     while start < text_len:
         end = start + chunk_size
 
@@ -27,9 +31,9 @@ def _split_text_with_overlap(text: str, chunk_size: int = 500, chunk_overlap: in
                 chunks.append(chunk)
             break
 
-        # Look for natural breakpoint (newline, period, space) near the end
+        # Look for natural breakpoint near the end
         boundary = -1
-        for sep in ["\n\n", "\n", ". ", " "]:
+        for sep in separators:
             pos = text.rfind(sep, start, end)
             if pos != -1 and pos > start + (chunk_size // 2):
                 boundary = pos + len(sep)
@@ -42,16 +46,23 @@ def _split_text_with_overlap(text: str, chunk_size: int = 500, chunk_overlap: in
         if chunk:
             chunks.append(chunk)
 
-        # Move start forward with overlap
-        start = max(start + 1, end - chunk_overlap)
+        # Move start forward with overlap, ensuring we do not cut words in half
+        next_start = max(start + 1, end - chunk_overlap)
+        if next_start < end:
+            space_pos = text.find(" ", next_start, end)
+            newline_pos = text.find("\n", next_start, end)
+            candidates = [p for p in (space_pos, newline_pos) if p != -1]
+            if candidates:
+                next_start = min(candidates) + 1
+        start = next_start
 
     return chunks
 
 
 def chunk_document(
     pages: List[Dict[str, Any]],
-    chunk_size: int = 500,
-    chunk_overlap: int = 50
+    chunk_size: int = 1200,
+    chunk_overlap: int = 200
 ) -> List[DocumentChunk]:
     """Split multiple pages into DocumentChunk objects, preserving document and page metadata.
 
@@ -66,7 +77,8 @@ def chunk_document(
     document_chunks: List[DocumentChunk] = []
 
     for page in pages:
-        doc_name = page.get("doc_name", "unknown")
+        raw_doc_name = page.get("doc_name", "unknown")
+        doc_name = unicodedata.normalize("NFC", str(raw_doc_name))
         page_number = int(page.get("page_number", 1))
         page_text = page.get("text", "")
         is_scanned = bool(page.get("is_scanned", False))

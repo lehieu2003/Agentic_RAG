@@ -1,8 +1,10 @@
 """LLM Answer Generator with citation extraction, citation grounding, and abstention enforcement."""
 
 import os
+from pathlib import Path
 import re
 from typing import Any, List, Optional
+import unicodedata
 from src.models import Citation, QAResponse, RetrievalResult
 from src.rag.prompt import ABSTAIN_PHRASE, build_rag_prompt
 
@@ -11,7 +13,7 @@ class RAGGenerator:
     """Coordinates LLM calls, parses citations, and applies hallucination guardrails."""
 
     CITATION_PATTERN = re.compile(
-        r"\[Tài liệu:\s*([^,\]|]+?)(?:\s*\|\s*|\s*,\s*)Trang(?:\s*:)?\s*(\d+)\]",
+        r"\[(?:Tài liệu:\s*|Nguồn:\s*)?([^,\]|\(\)\n]+?)(?:\s*\|\s*|\s*,\s*|\s*-\s*|\s*\(|\s+)Trang(?:\s*:)?\s*(\d+)\)?\]",
         re.IGNORECASE
     )
 
@@ -48,13 +50,16 @@ class RAGGenerator:
                 retrieved_chunks=retrieved_chunks
             )
 
-        # Build set of valid sources from retrieved chunks
-        valid_sources = {
-            (r.chunk.doc_name.strip().lower(), r.chunk.page_number)
-            for r in retrieved_chunks
-        }
+        def _norm(s: str) -> str:
+            return unicodedata.normalize("NFC", s).strip().lower()
 
-        # Extract citations: [Tài liệu: doc.pdf, Trang 12]
+        # Build mapping of valid sources: {(normalized_doc_name, page_number): canonical_doc_name}
+        valid_sources: dict = {}
+        for r in retrieved_chunks:
+            norm_name = _norm(r.chunk.doc_name)
+            valid_sources[(norm_name, r.chunk.page_number)] = r.chunk.doc_name
+
+        # Extract citations: e.g. [Tài liệu: doc.pdf, Trang 12]
         matches = self.CITATION_PATTERN.findall(raw_clean)
         seen_citations = set()
         citations: List[Citation] = []
@@ -62,12 +67,27 @@ class RAGGenerator:
         for doc_name, page_str in matches:
             doc_name_clean = doc_name.strip()
             page_num = int(page_str.strip())
-            source_key = (doc_name_clean.lower(), page_num)
+            norm_cited = _norm(doc_name_clean)
 
-            # Grounding check: only accept citation if present in retrieved chunks
-            if source_key in valid_sources and source_key not in seen_citations:
-                seen_citations.add(source_key)
-                citations.append(Citation(doc_name=doc_name_clean, page_number=page_num))
+            # Check grounding: exact match first, then flexible match (stem or substring)
+            matched_canonical_name = None
+            if (norm_cited, page_num) in valid_sources:
+                matched_canonical_name = valid_sources[(norm_cited, page_num)]
+            else:
+                for (v_doc, v_page), orig_doc in valid_sources.items():
+                    if v_page == page_num:
+                        if norm_cited in v_doc or v_doc in norm_cited:
+                            matched_canonical_name = orig_doc
+                            break
+                        if Path(norm_cited).stem == Path(v_doc).stem:
+                            matched_canonical_name = orig_doc
+                            break
+
+            if matched_canonical_name is not None:
+                source_key = (_norm(matched_canonical_name), page_num)
+                if source_key not in seen_citations:
+                    seen_citations.add(source_key)
+                    citations.append(Citation(doc_name=matched_canonical_name, page_number=page_num))
 
         # Grounding guardrail: If retrieved chunks exist but answer provides zero valid grounded citations
         if retrieved_chunks and not citations:

@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import shutil
 from typing import Any, Dict, List
+import unicodedata
 import uuid
 from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
@@ -62,7 +63,8 @@ async def upload_document(
     5. Phân đoạn ngữ nghĩa (chunking) bảo toàn số trang.
     6. Sinh embedding và lưu trữ vào Qdrant.
     """
-    safe_filename = Path(file.filename).name if file.filename else "uploaded_document"
+    raw_filename = Path(file.filename).name if file.filename else "uploaded_document"
+    safe_filename = unicodedata.normalize("NFC", raw_filename)
     ext = Path(safe_filename).suffix.lower()
     if ext not in SUPPORTED_EXTENSIONS:
         raise HTTPException(
@@ -84,7 +86,9 @@ async def upload_document(
     if hasattr(retriever, "get_indexed_doc_names"):
         active_docs = retriever.get_indexed_doc_names()
 
-    if safe_filename in active_docs and target_path.exists():
+    active_docs_norm = {unicodedata.normalize("NFC", d) for d in active_docs}
+
+    if safe_filename in active_docs_norm and target_path.exists():
         return UploadResponse(
             filename=safe_filename,
             pages_extracted=0,
@@ -122,7 +126,7 @@ async def upload_document(
         for p in pages:
             p["doc_name"] = safe_filename
 
-        chunks = chunk_document(pages)
+        chunks = chunk_document(pages, chunk_size=settings.chunk_size, chunk_overlap=settings.chunk_overlap)
         try:
             indexed_count = retriever.index_chunks(chunks)
         except NotImplementedError:
@@ -166,17 +170,20 @@ def list_files(request: Request) -> List[FileSummary]:
     if retriever is not None and hasattr(retriever, "get_indexed_doc_names"):
         active_docs = retriever.get_indexed_doc_names()
 
+    active_docs_norm = {unicodedata.normalize("NFC", d) for d in active_docs}
+
     files: List[FileSummary] = []
     for f in sorted(upload_dir.iterdir(), key=lambda p: p.name.lower()):
         if f.is_file() and not f.name.startswith("."):
-            if f.name not in active_docs:
+            norm_name = unicodedata.normalize("NFC", f.name)
+            if norm_name not in active_docs_norm:
                 f.unlink(missing_ok=True)
                 continue
 
             stat = f.stat()
             files.append(
                 FileSummary(
-                    filename=f.name,
+                    filename=norm_name,
                     size_bytes=stat.st_size,
                     uploaded_at=datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc).isoformat(),
                     file_type=f.suffix.lower(),
@@ -196,12 +203,19 @@ def delete_document(request: Request, filename: str) -> Dict[str, Any]:
     2. Xoá chunk trong BM25.
     3. Xoá file vật lý trong data/uploads/.
     """
-    safe_filename = Path(filename).name
-    if not safe_filename or safe_filename in {".", ".."}:
+    raw_name = Path(filename).name
+    if not raw_name or raw_name in {".", ".."}:
         raise HTTPException(status_code=400, detail="Invalid filename")
 
+    safe_filename = unicodedata.normalize("NFC", raw_name)
     upload_dir = _get_upload_dir()
     file_path = upload_dir / safe_filename
+
+    if not file_path.is_file():
+        for cand in upload_dir.iterdir():
+            if cand.is_file() and unicodedata.normalize("NFC", cand.name) == safe_filename:
+                file_path = cand
+                break
 
     retriever = getattr(request.app.state, "retriever", None)
     deleted_chunks = 0
@@ -228,12 +242,19 @@ def delete_document(request: Request, filename: str) -> Dict[str, Any]:
 )
 async def serve_file(filename: str):
     """Phục vụ file tài liệu gốc để xem trực tiếp trên tab trình duyệt (hỗ trợ #page=N cho PDF)."""
-    safe_filename = Path(filename).name
-    if not safe_filename or safe_filename in {".", ".."}:
+    raw_name = Path(filename).name
+    if not raw_name or raw_name in {".", ".."}:
         raise HTTPException(status_code=404, detail="File not found")
 
+    safe_filename = unicodedata.normalize("NFC", raw_name)
     upload_dir = _get_upload_dir()
     file_path = (upload_dir / safe_filename).resolve()
+
+    if not file_path.is_file():
+        for cand in upload_dir.iterdir():
+            if cand.is_file() and unicodedata.normalize("NFC", cand.name) == safe_filename:
+                file_path = cand.resolve()
+                break
 
     if not file_path.is_file() or not file_path.is_relative_to(upload_dir.resolve()):
         raise HTTPException(status_code=404, detail="File not found")

@@ -78,18 +78,23 @@ class QdrantVectorStore:
             return set()
 
     def delete_by_doc_name(self, doc_name: str) -> int:
-        """Delete all vectors and payload matching doc_name."""
+        """Delete all vectors and payload matching doc_name (in both NFC and NFD forms)."""
         self._ensure_collection()
         from qdrant_client.http import models
+        import unicodedata
+        nfc_name = unicodedata.normalize("NFC", doc_name)
+        nfd_name = unicodedata.normalize("NFD", doc_name)
+        values = list({doc_name, nfc_name, nfd_name})
         try:
             self.client.delete(
                 collection_name=self.collection_name,
                 points_selector=models.Filter(
-                    must=[
+                    should=[
                         models.FieldCondition(
                             key="doc_name",
-                            match=models.MatchValue(value=doc_name)
+                            match=models.MatchValue(value=v)
                         )
+                        for v in values
                     ]
                 )
             )
@@ -106,13 +111,15 @@ class QdrantVectorStore:
         if not chunks:
             return 0
         self._ensure_collection()
+        import unicodedata
 
         points: List[PointStruct] = []
         for chunk, vector in zip(chunks, vectors):
             point_uuid = str(uuid.uuid5(uuid.NAMESPACE_DNS, chunk.chunk_id))
+            norm_doc_name = unicodedata.normalize("NFC", chunk.doc_name)
             payload = {
                 "chunk_id": chunk.chunk_id,
-                "doc_name": chunk.doc_name,
+                "doc_name": norm_doc_name,
                 "page_number": chunk.page_number,
                 "text": chunk.text,
                 "metadata": chunk.metadata
