@@ -1,18 +1,27 @@
 """API route definitions for Document Q&A Assistant."""
 
-import shutil
-import tempfile
+from datetime import datetime, timezone
+import mimetypes
 from pathlib import Path
-from typing import Any, Dict
+import shutil
+from typing import Any, Dict, List
 from fastapi import APIRouter, File, HTTPException, Request, UploadFile
+from fastapi.responses import FileResponse
 from src.config import settings
 from src.ingestion.chunker import chunk_document
 from src.ingestion.document_extractor import extract_pages_from_document
-from src.models import QARequest, QAResponse
+from src.models import FileSummary, QARequest, QAResponse, UploadResponse
 
 router = APIRouter(prefix="/api/v1")
 
 SUPPORTED_EXTENSIONS = {".pdf", ".docx", ".txt", ".png", ".jpg", ".jpeg"}
+
+
+def _get_upload_dir() -> Path:
+    """Ensure and return the upload directory path from settings."""
+    upload_path = Path(settings.upload_dir)
+    upload_path.mkdir(parents=True, exist_ok=True)
+    return upload_path
 
 
 @router.get(
@@ -34,17 +43,21 @@ def health(request: Request) -> Dict[str, Any]:
 
 @router.post(
     "/upload",
+    response_model=UploadResponse,
     tags=["Tải lên tài liệu (Ingestion)"],
     summary="Tải lên tài liệu kỹ thuật để bóc tách text/OCR và đánh chỉ mục vector"
 )
 async def upload_document(
     request: Request,
     file: UploadFile = File(...)
-) -> Dict[str, Any]:
+) -> UploadResponse:
     """Tải lên tài liệu kỹ thuật (PDF, DOCX, TXT, PNG, JPG, JPEG). Hệ thống sẽ:
-    1. Trích xuất text kỹ thuật số hoặc OCR tuỳ định dạng.
-    2. Phân đoạn ngữ nghĩa (chunking) bảo toàn số trang.
-    3. Sinh embedding và lưu trữ vào Qdrant Cloud.
+    1. Kiểm tra định dạng hỗ trợ.
+    2. Chống nạp trùng lặp dựa trên tên file trong thư mục lưu trữ.
+    3. Lưu trữ file gốc vĩnh viễn vào data/uploads/.
+    4. Trích xuất text kỹ thuật số hoặc OCR tuỳ định dạng.
+    5. Phân đoạn ngữ nghĩa (chunking) bảo toàn số trang.
+    6. Sinh embedding và lưu trữ vào Qdrant.
     """
     safe_filename = Path(file.filename).name if file.filename else "uploaded_document"
     ext = Path(safe_filename).suffix.lower()
@@ -54,20 +67,34 @@ async def upload_document(
             detail=f"Unsupported file format: {ext}. Supported formats: {', '.join(sorted(SUPPORTED_EXTENSIONS))}"
         )
 
+    upload_dir = _get_upload_dir()
+    target_path = upload_dir / safe_filename
+
+    # Deduplication check: if file already exists in persistent storage, skip indexing
+    if target_path.exists():
+        return UploadResponse(
+            filename=safe_filename,
+            pages_extracted=0,
+            pages_digital=0,
+            pages_scanned_ocr=0,
+            chunks_indexed=0,
+            status="already_exists",
+            message=f"Tài liệu '{safe_filename}' đã tồn tại trên hệ thống. Bỏ qua nạp trùng lặp."
+        )
+
     retriever = getattr(request.app.state, "retriever", None)
     ocr_engine = getattr(request.app.state, "ocr_engine", None)
 
     if retriever is None:
         raise HTTPException(status_code=503, detail="Retriever service not initialized.")
 
-    # Save uploaded file to temporary path
-    with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp:
-        shutil.copyfileobj(file.file, tmp)
-        tmp_path = tmp.name
+    # Save uploaded file permanently to target_path
+    with open(target_path, "wb") as f:
+        shutil.copyfileobj(file.file, f)
 
     try:
         try:
-            pages = extract_pages_from_document(tmp_path, ocr_engine=ocr_engine)
+            pages = extract_pages_from_document(str(target_path), ocr_engine=ocr_engine)
         except Exception as e:
             raise HTTPException(status_code=400, detail=f"Corrupted or unreadable document '{file.filename}': {e}")
 
@@ -94,16 +121,69 @@ async def upload_document(
         scanned_count = sum(1 for p in pages if p.get("is_scanned"))
         digital_count = len(pages) - scanned_count
 
-        return {
-            "filename": safe_filename,
-            "pages_extracted": len(pages),
-            "pages_digital": digital_count,
-            "pages_scanned_ocr": scanned_count,
-            "chunks_indexed": indexed_count,
-            "status": "success"
-        }
-    finally:
-        Path(tmp_path).unlink(missing_ok=True)
+        return UploadResponse(
+            filename=safe_filename,
+            pages_extracted=len(pages),
+            pages_digital=digital_count,
+            pages_scanned_ocr=scanned_count,
+            chunks_indexed=indexed_count,
+            status="success"
+        )
+    except Exception:
+        # If extraction or indexing failed, remove the unindexed file so corrupt files aren't kept
+        target_path.unlink(missing_ok=True)
+        raise
+
+
+@router.get(
+    "/files",
+    response_model=List[FileSummary],
+    tags=["Quản lý tài liệu (Files)"],
+    summary="Danh sách tất cả các tài liệu đã được lưu trữ vĩnh viễn"
+)
+def list_files() -> List[FileSummary]:
+    """Liệt kê danh sách toàn bộ tài liệu đã lưu trên hệ thống kèm metadata kích thước và thời gian tải lên."""
+    upload_dir = _get_upload_dir()
+    files: List[FileSummary] = []
+    for f in sorted(upload_dir.iterdir(), key=lambda p: p.name.lower()):
+        if f.is_file() and not f.name.startswith("."):
+            stat = f.stat()
+            files.append(
+                FileSummary(
+                    filename=f.name,
+                    size_bytes=stat.st_size,
+                    uploaded_at=datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc).isoformat(),
+                    file_type=f.suffix.lower(),
+                )
+            )
+    return files
+
+
+@router.get(
+    "/files/{filename:path}",
+    tags=["Quản lý tài liệu (Files)"],
+    summary="Tải hoặc xem trực tiếp tài liệu gốc trên trình duyệt"
+)
+async def serve_file(filename: str):
+    """Phục vụ file tài liệu gốc để xem trực tiếp trên tab trình duyệt (hỗ trợ #page=N cho PDF)."""
+    safe_filename = Path(filename).name
+    if not safe_filename or safe_filename in {".", ".."}:
+        raise HTTPException(status_code=404, detail="File not found")
+
+    upload_dir = _get_upload_dir()
+    file_path = (upload_dir / safe_filename).resolve()
+
+    if not file_path.is_file() or not file_path.is_relative_to(upload_dir.resolve()):
+        raise HTTPException(status_code=404, detail="File not found")
+
+    mime_type, _ = mimetypes.guess_type(str(file_path))
+    mime_type = mime_type or "application/octet-stream"
+
+    return FileResponse(
+        path=str(file_path),
+        media_type=mime_type,
+        headers={"Content-Disposition": f'inline; filename="{safe_filename}"'}
+    )
 
 
 @router.post(

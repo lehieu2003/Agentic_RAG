@@ -1,7 +1,28 @@
 """Pydantic data models for Document Q&A Assistant."""
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
+
+
+class UploadResponse(BaseModel):
+    """Response returned upon document upload and indexing."""
+
+    filename: str
+    pages_extracted: int
+    pages_digital: int
+    pages_scanned_ocr: int
+    chunks_indexed: int
+    status: str = "success"
+    message: Optional[str] = None
+
+
+class FileSummary(BaseModel):
+    """Summary metadata of an uploaded file stored on disk."""
+
+    filename: str
+    size_bytes: int
+    uploaded_at: str
+    file_type: str
 
 
 class DocumentChunk(BaseModel):

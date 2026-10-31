@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     """Application settings loaded from environment variables or .env file."""
 
     app_name: str = "Document Q&A Assistant"
+    upload_dir: str = "data/uploads"
     qdrant_path: str = "data/qdrant_storage"
     qdrant_collection: str = "technical_documents"
     qdrant_url: str = ""

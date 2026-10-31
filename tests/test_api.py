@@ -7,7 +7,15 @@ from PIL import Image
 import docx
 from fastapi.testclient import TestClient
 from src.api.main import app
+from src.config import settings
 from src.retrieval.base import BaseRetriever
+
+@pytest.fixture(autouse=True)
+def isolated_upload_dir(tmp_path, monkeypatch):
+    upload_dir = tmp_path / "uploads"
+    upload_dir.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setattr(settings, "upload_dir", str(upload_dir))
+    yield upload_dir
 
 @pytest.fixture(scope="module")
 def client():
