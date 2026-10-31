@@ -18,14 +18,36 @@ html, body, [class*="css"] {
     color: #ececec !important;
 }
 
-/* Hide Streamlit Clutter */
-#MainMenu, header[data-testid="stHeader"], footer {
-    visibility: hidden !important;
-    height: 0px !important;
+/* Hide Streamlit Clutter (deploy button, 3-dots menu, footer) but keep header and sidebar toggle control */
+#MainMenu, footer, .stDeployButton, [data-testid="stToolbar"] {
+    display: none !important;
 }
 
-.stDeployButton, [data-testid="stToolbar"] {
-    display: none !important;
+header[data-testid="stHeader"] {
+    background: transparent !important;
+}
+
+/* Ensure sidebar toggle button (chevron to reopen sidebar) is always visible and prominent */
+[data-testid="stSidebarCollapsedControl"] {
+    display: flex !important;
+    visibility: visible !important;
+    z-index: 999999 !important;
+    top: 14px !important;
+    left: 14px !important;
+}
+
+[data-testid="stSidebarCollapsedControl"] button {
+    background-color: #2f2f2f !important;
+    color: #ececec !important;
+    border: 1px solid #444444 !important;
+    border-radius: 8px !important;
+    padding: 6px !important;
+}
+
+[data-testid="stSidebarCollapsedControl"] button:hover {
+    background-color: #3f3f3f !important;
+    border-color: #666666 !important;
+    color: #ffffff !important;
 }
 
 /* Max Width Main Container (Centered like ChatGPT) */
