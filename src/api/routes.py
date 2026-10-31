@@ -220,9 +220,11 @@ def query_assistant(
     llm_client = getattr(agent_instance, "llm_client", getattr(generator, "llm_client", None))
     provider = getattr(agent_instance, "provider", getattr(generator, "provider", settings.llm_provider))
     model_name = getattr(agent_instance, "model_name", getattr(generator, "model_name", settings.gemini_model))
+    reranker = getattr(request.app.state, "reranker", None)
 
     agent = AgenticRAG(
         retriever=retriever,
+        reranker=reranker,
         llm_client=llm_client,
         provider=provider,
         model_name=model_name,

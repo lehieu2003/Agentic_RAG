@@ -1,5 +1,6 @@
-"""LangGraph-powered Agentic RAG Engine with Query Expansion, Multi-Query Retrieval, and Self-Correction."""
+"""LangGraph-powered Agentic RAG Engine with Query Expansion, Hybrid Retrieval, Cross-Encoder Reranking, Grader, and Citation Self-Correction."""
 
+import json
 import re
 import unicodedata
 from typing import Any, Dict, List, Optional, TypedDict
@@ -7,31 +8,52 @@ from langgraph.graph import StateGraph, START, END
 
 from src.models import Citation, DocumentChunk, QAResponse, RetrievalResult
 from src.rag.generator import RAGGenerator
-from src.rag.prompt import ABSTAIN_PHRASE
+from src.rag.prompt import ABSTAIN_PHRASE, build_rag_prompt
 from src.retrieval.base import BaseRetriever
+from src.retrieval.reranker import CrossEncoderReranker
 
 
 class AgentState(TypedDict, total=False):
-    """Execution state passed between nodes in the LangGraph agentic loop."""
+    """Execution state passed between nodes in the Agentic RAG v2 graph."""
 
-    question: str
+    # Input queries
+    question: str                         # Raw user query
+    clean_question: str                   # Cleaned query after removing greeting prefixes
+    is_chitchat: bool                     # True if query is purely social/greeting
+    chitchat_reply: Optional[str]         # Canned friendly response for greetings
+
+    # Retrieval & Reranking
+    queries: List[str]                    # Active queries for this iteration
+    all_queries: List[str]                # Cumulative query history
+    candidate_chunks: List[RetrievalResult]  # Candidates from RRF (top 20)
+    reranked_chunks: List[RetrievalResult]   # Top reranked chunks (top 5)
+
+    # Grading & Reflection
+    is_sufficient: bool                   # True if chunks contain sufficient factual answers
+    grader_feedback: str                  # Explanation of missing information if insufficient
+    retries: int                          # Retrieval rewrite attempt counter (max 1)
+
+    # Generation & Self-Correction
+    gen_retries: int                      # Citation correction attempt counter (max 1)
+    citation_feedback: Optional[str]      # Error description passed back to generator
+    answer: str                           # Synthesized text
+    citations: List[Citation]             # Validated citations
+    abstained: bool                       # True if refusing to answer
+
+    # Observability
+    reasoning_steps: List[str]            # Step-by-step audit log for UI inspection
+
+    # Graph flow auxiliary
     top_k: int
-    is_chitchat: bool
-    chitchat_reply: Optional[str]
-    queries: List[str]
-    all_queries: List[str]
-    candidate_chunks: List[RetrievalResult]
+    raw_generation: str
+    is_citation_valid: bool
+    retry_generation: bool
     relevant_chunks: List[RetrievalResult]
     max_score: float
-    retries: int
-    abstained: bool
-    answer: str
-    citations: List[Citation]
-    reasoning_steps: List[str]
 
 
 class AgenticRAG:
-    """LangGraph-driven Autonomous RAG agent with query expansion, multi-query retrieval, self-reflection, and corrective re-querying."""
+    """LangGraph v2 Closed-Loop Agentic RAG engine with hybrid search, reranker, sufficiency grader, and citation correction."""
 
     CHITCHAT_PATTERNS = [
         (
@@ -64,21 +86,30 @@ class AgenticRAG:
         ),
     ]
 
+    GREETING_PREFIX_PATTERN = re.compile(
+        r"^(?:xin\s+chào|chào\s+(?:bạn|trợ\s+lý|bot|ad|anh|chị|em|mọi\s+người)?|hello|hi|hey|halo|hé\s+lô|alo|good\s+morning|good\s+afternoon|good\s+evening)\s*[,.:;!\-–—]*\s*",
+        re.IGNORECASE
+    )
+
     def __init__(
         self,
-        retriever: BaseRetriever,
+        retriever: Optional[BaseRetriever] = None,
+        reranker: Optional[CrossEncoderReranker] = None,
         llm_client: Optional[Any] = None,
         provider: str = "gemini",
         model_name: Optional[str] = None,
         min_relevance_score: float = 0.35,
-        max_retries: int = 1
-    ):
+        max_retries: int = 1,
+        max_gen_retries: int = 1
+    ) -> None:
         self.retriever = retriever
+        self.reranker = reranker
         self.llm_client = llm_client
         self.provider = provider
         self.model_name = model_name or ("gemini-3.5-flash-lite" if provider == "gemini" else "gpt-4o-mini")
         self.min_relevance_score = min_relevance_score
         self.max_retries = max_retries
+        self.max_gen_retries = max_gen_retries
 
         self.generator = RAGGenerator(
             llm_client=llm_client,
@@ -139,11 +170,7 @@ class AgenticRAG:
         return None
 
     def expand_query(self, question: str) -> List[str]:
-        """Generate search query variations for technical document retrieval.
-
-        Produces domain synonyms, English technical terms (e.g. ISO/IEC standards),
-        and unaccented Vietnamese to robustly match scanned OCR documents.
-        """
+        """Generate search query variations for technical document retrieval."""
         clean_q = question.strip()
         if not clean_q:
             return []
@@ -173,12 +200,10 @@ class AgenticRAG:
                     if len(variations) >= 3:
                         break
 
-        # Always ensure an unaccented variation is included for Vietnamese queries to support OCR text
         if unaccented_q.lower() not in seen:
             seen.add(unaccented_q.lower())
             variations.append(unaccented_q)
 
-        # Deterministic / mock fallback if needed
         if len(variations) < 3:
             fallback = [
                 f"{clean_q} thông số kỹ thuật",
@@ -212,11 +237,14 @@ class AgenticRAG:
                 merged[key] = r
 
         sorted_results = sorted(merged.values(), key=lambda r: r.score, reverse=True)
-        limit = max(top_k * 5, 25)
+        limit = max(top_k * 4, 20)
         return sorted_results[:limit]
 
     def multi_query_retrieve(self, queries: List[str], top_k: int = 5) -> List[RetrievalResult]:
         """Execute retrieval across multiple queries, preserving diversity and deduplicating chunks."""
+        if self.retriever is None:
+            return []
+
         guaranteed_diverse: Dict[Any, RetrievalResult] = {}
         all_collected: List[RetrievalResult] = []
         fetch_k = max(top_k * 4, 20)
@@ -231,8 +259,6 @@ class AgenticRAG:
             else:
                 results = []
 
-            # Retain top chunks from each query formulation to prevent diverse queries (e.g. English standards)
-            # from being crowded out by dense language clusters
             for r in results[:top_k]:
                 key = self._get_chunk_key(r.chunk)
                 if key not in guaranteed_diverse or r.score > guaranteed_diverse[key].score:
@@ -240,28 +266,49 @@ class AgenticRAG:
 
             all_collected.extend(results)
 
-        # Merge diverse set with general collected results
         combined = list(guaranteed_diverse.values()) + all_collected
         return self._merge_chunks(combined, top_k=top_k)
 
-    def rewrite_query(self, question: str, attempted_queries: List[str]) -> str:
-        """Rewrite question using broader technical terminology or synonyms."""
+    def rewrite_query(
+        self,
+        question: str,
+        attempted_queries: Optional[List[str]] = None,
+        missing_aspect: str = ""
+    ) -> List[str]:
+        """Rewrite question using feedback on missing aspects or broader technical terminology."""
         clean_q = question.strip()
+        attempted = attempted_queries or [clean_q]
+        variations: List[str] = []
+
         if self.llm_client is not None:
             prompt = (
-                f"Câu hỏi kỹ thuật sau đây không tìm thấy kết quả phù hợp: '{clean_q}'.\n"
-                f"Các truy vấn đã thử nhưng chưa đạt: {attempted_queries}.\n"
-                f"Hãy viết lại 1 câu truy vấn tìm kiếm mới, dùng thuật ngữ tổng quan hơn hoặc từ đồng nghĩa kỹ thuật.\n"
-                f"Chỉ trả về duy nhất 1 câu truy vấn mới, không giải thích."
+                f"Câu hỏi kỹ thuật ban đầu: '{clean_q}'.\n"
+                f"Các truy vấn đã thử: {attempted}.\n"
+            )
+            if missing_aspect:
+                prompt += f"Khía cạnh còn thiếu hoặc cần bổ sung thông tin: '{missing_aspect}'.\n"
+            prompt += (
+                f"Hãy viết lại 2 truy vấn tìm kiếm mới tập trung vào khía cạnh còn thiếu hoặc sử dụng thuật ngữ kỹ thuật chính xác hơn.\n"
+                f"Mỗi truy vấn trên một dòng mới. Không thêm số thứ tự, gạch đầu dòng, hay giải thích."
             )
             text = self._call_llm(prompt).strip()
             if text:
-                clean_text = re.sub(r"^[\s*•\-\d\.]+", "", text).strip()
-                if clean_text:
-                    return clean_text
+                lines = [
+                    re.sub(r"^[\s*•\-\d\.]+", "", line).strip()
+                    for line in text.splitlines()
+                ]
+                for line in lines:
+                    if line and line.lower() not in [q.lower() for q in attempted]:
+                        variations.append(line)
+                        if len(variations) >= 2:
+                            break
 
-        # Fallback query rewrite
-        return f"{clean_q} tổng quan nguyên lý hoạt động"
+        if not variations:
+            if missing_aspect:
+                variations.append(f"{clean_q} {missing_aspect}".strip())
+            variations.append(f"{clean_q} tổng quan nguyên lý hoạt động")
+
+        return variations
 
     def validate_citations(
         self,
@@ -272,179 +319,393 @@ class AgenticRAG:
         return self.generator.parse_llm_output(raw_output, retrieved_chunks)
 
     # -------------------------------------------------------------------------
-    # LangGraph Nodes & Conditional Edges
+    # LangGraph Nodes & Conditional Edges (8+1 Numbered Nodes)
     # -------------------------------------------------------------------------
 
     def _node_router(self, state: AgentState) -> Dict[str, Any]:
-        """Node 1: Detect greetings or system introductory queries."""
-        reply = self._detect_chitchat(state["question"])
+        """Node 1: Smart Chit-chat & Intent Extractor."""
+        raw_question = state["question"].strip()
+
+        # 1. Pure chitchat check on full query
+        reply = self._detect_chitchat(raw_question)
         if reply:
             return {
+                "clean_question": raw_question,
                 "is_chitchat": True,
                 "chitchat_reply": reply,
                 "answer": reply,
                 "abstained": False,
                 "citations": [],
                 "candidate_chunks": [],
-                "all_queries": [state["question"]],
-                "reasoning_steps": ["Nhận diện câu hỏi là lời chào hỏi / giao tiếp thông thường (Chit-chat Router)"]
+                "reranked_chunks": [],
+                "all_queries": [raw_question],
+                "reasoning_steps": ["1. router: Nhận diện câu hỏi là lời chào hỏi / giao tiếp thông thường (Chit-chat Router)"]
             }
+
+        # 2. Greeting prefix stripping for mixed-intent queries
+        clean_q = self.GREETING_PREFIX_PATTERN.sub("", raw_question).strip()
+        if not clean_q:
+            clean_q = raw_question
+
+        reply_stripped = self._detect_chitchat(clean_q)
+        if reply_stripped:
+            return {
+                "clean_question": clean_q,
+                "is_chitchat": True,
+                "chitchat_reply": reply_stripped,
+                "answer": reply_stripped,
+                "abstained": False,
+                "citations": [],
+                "candidate_chunks": [],
+                "reranked_chunks": [],
+                "all_queries": [clean_q],
+                "reasoning_steps": ["1. router: Nhận diện câu hỏi là lời chào hỏi / giao tiếp thông thường (Chit-chat Router)"]
+            }
+
         return {
+            "clean_question": clean_q,
             "is_chitchat": False,
-            "reasoning_steps": [f"Tiếp nhận câu hỏi: '{state['question']}'"]
+            "reasoning_steps": [f"1. router: Đã chuẩn hóa câu hỏi: '{clean_q}' (loại bỏ lời chào hỏi nếu có)"]
         }
 
     def _route_after_router(self, state: AgentState) -> str:
-        """Conditional routing: terminate if chitchat, else proceed to query expansion."""
+        """Route to END if pure chitchat, else proceed to 2_expand_query."""
         if state.get("is_chitchat"):
             return END
-        return "expand_query"
+        return "2_expand_query"
 
     def _node_expand_query(self, state: AgentState) -> Dict[str, Any]:
-        """Node 2: Expand query into multi-lingual / OCR-tolerant variations."""
-        expanded = self.expand_query(state["question"])
+        """Node 2: Multilingual / OCR query generator."""
+        clean_q = state.get("clean_question", state["question"])
+        expanded = self.expand_query(clean_q)
         if not expanded:
-            expanded = [state["question"]]
+            expanded = [clean_q]
         steps = list(state.get("reasoning_steps", []))
-        steps.append(f"Mở rộng truy vấn thành {len(expanded)} biến thể: {expanded}")
+        steps.append(f"2. expand_query: Mở rộng truy vấn thành {len(expanded)} biến thể: {expanded}")
         return {
             "queries": expanded,
             "all_queries": list(expanded),
             "reasoning_steps": steps
         }
 
-    def _node_retrieve(self, state: AgentState) -> Dict[str, Any]:
-        """Node 3: Execute multi-query retrieval and merge results."""
-        queries_to_run = state.get("queries", [state["question"]])
-        new_chunks = self.multi_query_retrieve(queries_to_run, top_k=state.get("top_k", 5))
+    def _node_hybrid_retrieve(self, state: AgentState) -> Dict[str, Any]:
+        """Node 3: Multi-query retrieval merging candidates via RRF."""
+        queries_to_run = state.get("queries") or [state.get("clean_question", state["question"])]
+        top_k = state.get("top_k", 5)
+        new_chunks = self.multi_query_retrieve(queries_to_run, top_k=top_k)
         existing = state.get("candidate_chunks", [])
-        merged = self._merge_chunks(existing + new_chunks, top_k=state.get("top_k", 5))
-        max_score = max((c.score for c in merged), default=0.0)
+        merged = self._merge_chunks(existing + new_chunks, top_k=top_k)
+        candidate_pool = merged[:20]
+        max_score = max((c.score for c in candidate_pool), default=0.0)
 
         steps = list(state.get("reasoning_steps", []))
-        steps.append(f"Truy xuất được {len(merged)} đoạn tài liệu ứng viên (điểm cao nhất: {max_score:.2f})")
+        steps.append(
+            f"3. hybrid_retrieve: Truy xuất được {len(candidate_pool)} đoạn tài liệu ứng viên "
+            f"từ {len(queries_to_run)} truy vấn (điểm cao nhất: {max_score:.2f})"
+        )
         return {
-            "candidate_chunks": merged,
+            "candidate_chunks": candidate_pool,
             "max_score": max_score,
             "reasoning_steps": steps
         }
 
-    def _route_after_retrieve(self, state: AgentState) -> str:
-        """Self-Reflection: check relevance threshold against min_relevance_score."""
-        max_score = state.get("max_score", 0.0)
-        if max_score >= self.min_relevance_score:
-            return "generate"
+    def _node_rerank(self, state: AgentState) -> Dict[str, Any]:
+        """Node 4: Local Cross-Encoder Reranking."""
+        clean_q = state.get("clean_question", state["question"])
+        candidates = state.get("candidate_chunks", [])
+        top_k = state.get("top_k", 5)
+        steps = list(state.get("reasoning_steps", []))
+
+        if self.reranker is not None and candidates:
+            try:
+                reranked = self.reranker.rerank(clean_q, candidates, top_k=top_k)
+            except Exception as e:
+                steps.append(f"4. rerank: Cảnh báo lỗi reranker ({str(e)}), dùng kết quả truy xuất gốc.")
+                reranked = candidates[:top_k]
+        else:
+            reranked = candidates[:top_k]
+
+        steps.append(f"4. rerank: Đã đánh giá và xếp hạng lại {len(reranked)} đoạn tài liệu phù hợp nhất")
+        return {
+            "reranked_chunks": reranked,
+            "reasoning_steps": steps
+        }
+
+    def _node_grade_relevance(self, state: AgentState) -> Dict[str, Any]:
+        """Node 5: Context Sufficiency Grader evaluating if reranked chunks contain facts to answer."""
+        clean_q = state.get("clean_question", state["question"])
+        reranked = state.get("reranked_chunks", [])
+        steps = list(state.get("reasoning_steps", []))
+
+        if not reranked:
+            steps.append("5. grade_relevance: Không tìm thấy tài liệu phù hợp (ngữ cảnh rỗng)")
+            return {
+                "is_sufficient": False,
+                "grader_feedback": "Không tìm thấy đoạn trích tài liệu nào liên quan.",
+                "reasoning_steps": steps
+            }
+
+        if self.llm_client is not None:
+            context_text = "\n\n".join(
+                f"[{idx+1}] Tài liệu: {r.chunk.doc_name}, Trang {r.chunk.page_number}:\n{r.chunk.text}"
+                for idx, r in enumerate(reranked)
+            )
+            prompt = (
+                f"Bạn là chuyên gia đánh giá ngữ cảnh tài liệu cho hệ thống RAG kỹ thuật (Context Sufficiency Grader).\n"
+                f"Câu hỏi của người dùng: '{clean_q}'\n\n"
+                f"Các đoạn trích dẫn tài liệu tìm được:\n{context_text}\n\n"
+                f"Nhiệm vụ: Hãy phân tích xem các đoạn trích trên có chứa ĐỦ thông tin và căn cứ thực tế để trả lời chính xác, đầy đủ cho câu hỏi hay không.\n"
+                f"Trả về kết quả dưới dạng JSON duy nhất với cấu trúc:\n"
+                f'{{"is_sufficient": true/false, "missing_aspects": "Mô tả ngắn gọn khía cạnh còn thiếu nếu false, hoặc rỗng nếu true"}}\n'
+                f"Chỉ trả về JSON, không giải thích thêm."
+            )
+            raw = self._call_llm(prompt).strip()
+            is_sufficient = True
+            missing_aspects = ""
+            try:
+                json_match = re.search(r"\{.*\}", raw, re.DOTALL)
+                if json_match:
+                    parsed = json.loads(json_match.group(0))
+                    is_sufficient = bool(parsed.get("is_sufficient", True))
+                    missing_aspects = str(parsed.get("missing_aspects", "") or "")
+                else:
+                    if '"is_sufficient": false' in raw.lower() or '"is_sufficient":false' in raw.lower():
+                        is_sufficient = False
+                        missing_aspects = "Thông tin không đủ theo đánh giá LLM"
+            except Exception:
+                max_score = max((r.score for r in reranked), default=0.0)
+                is_sufficient = max_score >= self.min_relevance_score
+                if not is_sufficient:
+                    missing_aspects = f"Điểm phù hợp thấp ({max_score:.2f} < {self.min_relevance_score:.2f})"
+
+            if is_sufficient:
+                steps.append("5. grade_relevance: Ngữ cảnh đủ thông tin để trả lời câu hỏi")
+            else:
+                steps.append(f"5. grade_relevance: Ngữ cảnh chưa đủ thông tin. Khía cạnh còn thiếu: {missing_aspects}")
+
+            return {
+                "is_sufficient": is_sufficient,
+                "grader_feedback": missing_aspects,
+                "reasoning_steps": steps
+            }
+
+        # Fallback when llm_client is None
+        max_score = max((r.score for r in reranked), default=0.0)
+        is_sufficient = max_score >= self.min_relevance_score
+        missing_aspects = "" if is_sufficient else f"Điểm phù hợp thấp ({max_score:.2f} < {self.min_relevance_score:.2f})"
+        if is_sufficient:
+            steps.append("5. grade_relevance: Ngữ cảnh đủ thông tin để trả lời câu hỏi")
+        else:
+            steps.append(f"5. grade_relevance: Ngữ cảnh chưa đủ thông tin. Khía cạnh còn thiếu: {missing_aspects}")
+
+        return {
+            "is_sufficient": is_sufficient,
+            "grader_feedback": missing_aspects,
+            "reasoning_steps": steps
+        }
+
+    def _route_after_grade(self, state: AgentState) -> str:
+        """Route to 7_generate if sufficient, 6_rewrite_query if retries remaining, else 9_abstain."""
+        if state.get("is_sufficient"):
+            return "7_generate"
         if state.get("retries", 0) < self.max_retries:
-            return "rewrite_query"
-        return "abstain"
+            return "6_rewrite_query"
+        return "9_abstain"
 
     def _node_rewrite_query(self, state: AgentState) -> Dict[str, Any]:
-        """Node 4: Corrective Query Rewrite when retrieval score is low."""
+        """Node 6: Feedback-guided Query Rewrite."""
         retries = state.get("retries", 0) + 1
-        rewritten = self.rewrite_query(state["question"], attempted_queries=state.get("all_queries", []))
-        all_q = list(state.get("all_queries", [])) + [rewritten]
+        clean_q = state.get("clean_question", state["question"])
+        attempted = state.get("all_queries", [clean_q])
+        feedback = state.get("grader_feedback", "")
+
+        new_queries = self.rewrite_query(clean_q, attempted_queries=attempted, missing_aspect=feedback)
+        all_q = list(attempted)
+        for q in new_queries:
+            if q not in all_q:
+                all_q.append(q)
 
         steps = list(state.get("reasoning_steps", []))
         steps.append(
-            f"Điểm phù hợp cao nhất ({state.get('max_score', 0.0):.2f}) thấp hơn ngưỡng ({self.min_relevance_score:.2f}). "
-            f"Kích hoạt viết lại truy vấn (Query Rewrite vòng {retries}): '{rewritten}'"
+            f"6. rewrite_query: Viết lại truy vấn dựa trên phản hồi (vòng {retries}): {new_queries}"
         )
         return {
-            "queries": [rewritten],
+            "queries": new_queries,
             "all_queries": all_q,
             "retries": retries,
             "reasoning_steps": steps
         }
 
     def _node_generate(self, state: AgentState) -> Dict[str, Any]:
-        """Node 5: Synthesize grounded response using verified context chunks."""
-        candidates = state.get("candidate_chunks", [])
-        relevant = [c for c in candidates if c.score >= self.min_relevance_score]
+        """Node 7: Grounded answer synthesis."""
+        clean_q = state.get("clean_question", state["question"])
+        context_chunks = state.get("reranked_chunks") or state.get("candidate_chunks", [])
+        citation_feedback = state.get("citation_feedback")
         steps = list(state.get("reasoning_steps", []))
 
-        if not relevant:
-            steps.append(f"Không có đoạn tài liệu nào đạt ngưỡng tin cậy {self.min_relevance_score:.2f}. Từ chối trả lời (Abstain).")
-            return {
-                "answer": ABSTAIN_PHRASE,
-                "citations": [],
-                "abstained": True,
-                "relevant_chunks": [],
-                "reasoning_steps": steps
-            }
+        steps.append(f"7. generate: Tổng hợp câu trả lời từ {len(context_chunks)} đoạn tài liệu phù hợp")
 
-        steps.append(f"Tổng hợp câu trả lời từ {len(relevant)} đoạn tài liệu phù hợp")
-        resp = self.generator.generate_answer(state["question"], relevant)
+        effective_question = clean_q
+        if citation_feedback:
+            directive = (
+                f"Lưu ý từ lần sinh trước: Bạn đã trích dẫn nguồn không hợp lệ hoặc thiếu số trang: {citation_feedback}. "
+                f"Hãy chỉ sử dụng thông tin và số trang có trong các đoạn trích dẫn được cung cấp."
+            )
+            effective_question = f"[{directive}]\n\n{clean_q}"
+            steps.append(f"7. generate: Áp dụng chỉ thị điều chỉnh trích dẫn: {citation_feedback}")
 
-        if resp.abstained:
-            steps.append("Bộ sinh câu trả lời từ chối do trích dẫn không có căn cứ hoặc thiếu dữ liệu")
+        if self.llm_client is not None:
+            prompt = build_rag_prompt(effective_question, context_chunks)
+            raw_output = self._call_llm(prompt)
+            if not raw_output:
+                raw_output = ABSTAIN_PHRASE
         else:
-            steps.append(f"Hoàn thành câu trả lời với {len(resp.citations)} trích dẫn hợp lệ")
+            if context_chunks:
+                first = context_chunks[0].chunk
+                raw_output = f"Theo tài liệu kỹ thuật, {first.text} [Tài liệu: {first.doc_name}, Trang {first.page_number}]."
+            else:
+                raw_output = ABSTAIN_PHRASE
 
         return {
-            "answer": resp.answer,
-            "citations": resp.citations,
-            "abstained": resp.abstained,
-            "relevant_chunks": relevant,
+            "raw_generation": raw_output,
+            "answer": raw_output,
             "reasoning_steps": steps
         }
 
-    def _node_abstain(self, state: AgentState) -> Dict[str, Any]:
-        """Node 6: Explicit abstention guardrail to prevent hallucinations."""
+    def _node_validate_citations(self, state: AgentState) -> Dict[str, Any]:
+        """Node 8: Citation Grounding & Format Verification with Self-Correction Loop."""
+        raw_output = state.get("raw_generation", state.get("answer", ""))
+        context_chunks = state.get("reranked_chunks") or state.get("candidate_chunks", [])
         steps = list(state.get("reasoning_steps", []))
-        steps.append(f"Không có đoạn tài liệu nào đạt ngưỡng tin cậy {self.min_relevance_score:.2f}. Từ chối trả lời (Abstain).")
+        current_gen_retries = state.get("gen_retries", 0)
+
+        qa_resp = self.validate_citations(raw_output, context_chunks)
+
+        if not qa_resp.abstained:
+            steps.append(f"8. validate_citations: Hoàn thành kiểm tra trích dẫn ({len(qa_resp.citations)} trích dẫn hợp lệ)")
+            return {
+                "is_citation_valid": True,
+                "retry_generation": False,
+                "answer": qa_resp.answer,
+                "citations": qa_resp.citations,
+                "abstained": False,
+                "reasoning_steps": steps
+            }
+
+        # Citation validation failed
+        if current_gen_retries < self.max_gen_retries:
+            matches = self.generator.CITATION_PATTERN.findall(raw_output)
+            if matches:
+                invalid_sources = [f"{d} trang {p}" for d, p in matches]
+                feedback = f"Trích dẫn không hợp lệ hoặc không có trong tài liệu: {', '.join(invalid_sources)}"
+            else:
+                feedback = "Thiếu trích dẫn nguồn theo định dạng [Tài liệu: ..., Trang ...]"
+
+            new_gen_retries = current_gen_retries + 1
+            steps.append(
+                f"8. validate_citations: Phát hiện lỗi trích dẫn ({feedback}). "
+                f"Kích hoạt tự sửa chữa (vòng {new_gen_retries})."
+            )
+            return {
+                "is_citation_valid": False,
+                "retry_generation": True,
+                "citation_feedback": feedback,
+                "gen_retries": new_gen_retries,
+                "reasoning_steps": steps
+            }
+        else:
+            steps.append(
+                f"8. validate_citations: Đã hết lượt thử sửa lỗi trích dẫn "
+                f"({current_gen_retries}/{self.max_gen_retries}). Chuyển sang từ chối trả lời."
+            )
+            return {
+                "is_citation_valid": False,
+                "retry_generation": False,
+                "reasoning_steps": steps
+            }
+
+    def _route_after_validate(self, state: AgentState) -> str:
+        """Route to END if valid, 7_generate if retry available, else 9_abstain."""
+        if state.get("is_citation_valid"):
+            return END
+        if state.get("retry_generation"):
+            return "7_generate"
+        return "9_abstain"
+
+    def _node_abstain(self, state: AgentState) -> Dict[str, Any]:
+        """Node 9: Explicit abstention guardrail to prevent hallucinations."""
+        steps = list(state.get("reasoning_steps", []))
+        reason = state.get("grader_feedback") or "Không có đủ thông tin hoặc trích dẫn hợp lệ"
+        steps.append(f"9. abstain: Từ chối trả lời (Abstain). Lý do: {reason}")
         return {
             "answer": ABSTAIN_PHRASE,
             "citations": [],
             "abstained": True,
-            "relevant_chunks": [],
             "reasoning_steps": steps
         }
 
     def _build_graph(self):
-        """Construct and compile the LangGraph StateGraph workflow."""
+        """Construct and compile the 8+1 numbered node LangGraph StateGraph workflow."""
         workflow = StateGraph(AgentState)
 
-        workflow.add_node("router", self._node_router)
-        workflow.add_node("expand_query", self._node_expand_query)
-        workflow.add_node("retrieve", self._node_retrieve)
-        workflow.add_node("rewrite_query", self._node_rewrite_query)
-        workflow.add_node("generate", self._node_generate)
-        workflow.add_node("abstain", self._node_abstain)
+        workflow.add_node("1_router", self._node_router)
+        workflow.add_node("2_expand_query", self._node_expand_query)
+        workflow.add_node("3_hybrid_retrieve", self._node_hybrid_retrieve)
+        workflow.add_node("4_rerank", self._node_rerank)
+        workflow.add_node("5_grade_relevance", self._node_grade_relevance)
+        workflow.add_node("6_rewrite_query", self._node_rewrite_query)
+        workflow.add_node("7_generate", self._node_generate)
+        workflow.add_node("8_validate_citations", self._node_validate_citations)
+        workflow.add_node("9_abstain", self._node_abstain)
 
-        workflow.add_edge(START, "router")
+        workflow.add_edge(START, "1_router")
         workflow.add_conditional_edges(
-            "router",
+            "1_router",
             self._route_after_router,
-            {"expand_query": "expand_query", END: END}
+            {"2_expand_query": "2_expand_query", END: END}
         )
-        workflow.add_edge("expand_query", "retrieve")
+        workflow.add_edge("2_expand_query", "3_hybrid_retrieve")
+        workflow.add_edge("3_hybrid_retrieve", "4_rerank")
+        workflow.add_edge("4_rerank", "5_grade_relevance")
         workflow.add_conditional_edges(
-            "retrieve",
-            self._route_after_retrieve,
+            "5_grade_relevance",
+            self._route_after_grade,
             {
-                "generate": "generate",
-                "rewrite_query": "rewrite_query",
-                "abstain": "abstain"
+                "7_generate": "7_generate",
+                "6_rewrite_query": "6_rewrite_query",
+                "9_abstain": "9_abstain"
             }
         )
-        workflow.add_edge("rewrite_query", "retrieve")
-        workflow.add_edge("generate", END)
-        workflow.add_edge("abstain", END)
+        workflow.add_edge("6_rewrite_query", "3_hybrid_retrieve")
+        workflow.add_edge("7_generate", "8_validate_citations")
+        workflow.add_conditional_edges(
+            "8_validate_citations",
+            self._route_after_validate,
+            {
+                END: END,
+                "7_generate": "7_generate",
+                "9_abstain": "9_abstain"
+            }
+        )
+        workflow.add_edge("9_abstain", END)
 
         return workflow.compile()
 
     def draw_png(self, output_path: Optional[str] = "docs/langgraph_workflow.png") -> bytes:
-        """Export the compiled LangGraph StateGraph as a PNG diagram.
+        """Export the compiled LangGraph StateGraph as a PNG diagram with model label gemini-3.5-flash-lite."""
+        mermaid_syntax = self.app.get_graph().draw_mermaid()
+        mermaid_syntax = mermaid_syntax.replace(
+            "7_generate(7_generate)",
+            '7_generate("7_generate<br/>(gemini-3.5-flash-lite)")'
+        )
 
-        Uses LangGraph native draw_mermaid_png() with automatic mermaid.ink fallback.
-        """
         try:
-            png_bytes = self.app.get_graph().draw_mermaid_png()
+            from langchain_core.runnables.graph_mermaid import draw_mermaid_png
+            png_bytes = draw_mermaid_png(mermaid_syntax=mermaid_syntax)
         except Exception:
             import base64
             import httpx
-            mermaid_str = self.app.get_graph().draw_mermaid()
-            encoded = base64.urlsafe_b64encode(mermaid_str.encode("utf-8")).decode("ascii")
+            encoded = base64.urlsafe_b64encode(mermaid_syntax.encode("utf-8")).decode("ascii")
             url = f"https://mermaid.ink/img/{encoded}"
             with httpx.Client(timeout=15.0) as client:
                 r = client.get(url)
@@ -462,18 +723,22 @@ class AgenticRAG:
         """Execute the LangGraph workflow and return a structured QAResponse."""
         initial_state: AgentState = {
             "question": question,
+            "clean_question": question,
             "top_k": top_k,
             "is_chitchat": False,
             "chitchat_reply": None,
             "queries": [],
             "all_queries": [],
             "candidate_chunks": [],
-            "relevant_chunks": [],
-            "max_score": 0.0,
+            "reranked_chunks": [],
+            "is_sufficient": False,
+            "grader_feedback": "",
             "retries": 0,
-            "abstained": False,
+            "gen_retries": 0,
+            "citation_feedback": None,
             "answer": "",
             "citations": [],
+            "abstained": False,
             "reasoning_steps": [],
         }
 
@@ -483,11 +748,13 @@ class AgenticRAG:
         if not all_queries:
             all_queries = [question]
 
+        retrieved = final_state.get("reranked_chunks") or final_state.get("candidate_chunks", [])
+
         return QAResponse(
             answer=final_state.get("answer", ""),
             citations=final_state.get("citations", []),
             abstained=final_state.get("abstained", False),
-            retrieved_chunks=final_state.get("candidate_chunks", []),
+            retrieved_chunks=retrieved,
             rewritten_queries=all_queries,
             reasoning_steps=final_state.get("reasoning_steps", [])
         )
