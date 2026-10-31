@@ -9,7 +9,9 @@ from src.vector_store.qdrant_store import QdrantVectorStore
 from src.eval.runner import run_benchmark
 
 def test_full_pipeline_on_sample_docs(tmp_path):
-    pdf_path = "sample_docs/pump_maintenance_guide.pdf"
+    from scripts.generate_sample_docs import generate_sample_documents
+    generate_sample_documents(output_dir=str(tmp_path))
+    pdf_path = str(tmp_path / "pump_maintenance_guide.pdf")
     assert Path(pdf_path).exists(), "Sample doc must exist"
 
     pages = extract_pages_from_pdf(pdf_path)

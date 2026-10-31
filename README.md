@@ -56,9 +56,9 @@ Hệ thống tuân thủ kiến trúc Clean / Hexagonal Modular Monorepo:
 3. **Chunking bảo toàn số trang**:
    - Phân chia văn bản thành các đoạn (chunks) có overlap.
    - Giữ nguyên `doc_name` và `page_number` (1-indexed) ở từng chunk bất kể tài liệu là PDF, DOCX, TXT hay Ảnh.
-4. **Vector Database (Qdrant Embedded)**:
+4. **Vector Database (Qdrant Cloud & Local)**:
    - Sử dụng model `sentence-transformers/all-MiniLM-L6-v2` tạo vector 384 chiều chuẩn hóa.
-   - Lưu trữ trực tiếp trên file cục bộ `data/qdrant_storage/` không bắt buộc chạy Docker.
+   - Hỗ trợ kết nối Qdrant Cloud Cluster (`QDRANT_URL`, `QDRANT_API_KEY`) hoặc lưu trữ cục bộ.
 5. **RAG Guardrails (Citations & Abstention)**:
    - Trả lời luôn kèm nguồn gốc: `[Tài liệu: <doc_name>, Trang <page_number>]`.
    - Cơ chế từ chối dứt khoát khi tài liệu không chứa đủ dữ kiện: `"Tôi không tìm thấy thông tin này trong tài liệu được cung cấp."` (ngăn chặn hallucination).
@@ -102,11 +102,8 @@ RETRIEVAL_MODE="local"            # "local" hoặc "grpc"
 GRPC_PORT=50051
 ```
 
-### 3. Tạo dữ liệu mẫu & chạy Benchmark Evaluation
+### 3. Chạy Benchmark Evaluation
 ```bash
-# Tạo 2 tài liệu kỹ thuật mẫu (PDF digital + PDF scan)
-python scripts/generate_sample_docs.py
-
 # Chạy benchmark đo Recall@K trên tập Ground Truth
 python scripts/run_eval.py
 ```
@@ -126,22 +123,22 @@ Endpoint `/api/v1/upload` tiếp nhận 1 tệp mỗi lượt yêu cầu (`multi
 # Upload file PDF
 curl -X POST "http://localhost:8000/api/v1/upload" \
   -H "accept: application/json" \
-  -F "file=@sample_docs/pump_maintenance_guide.pdf"
+  -F "file=@path/to/document.pdf"
 
 # Upload file Word (.docx)
 curl -X POST "http://localhost:8000/api/v1/upload" \
   -H "accept: application/json" \
-  -F "file=@sample_docs/specification.docx"
+  -F "file=@path/to/document.docx"
 
 # Upload file Text (.txt)
 curl -X POST "http://localhost:8000/api/v1/upload" \
   -H "accept: application/json" \
-  -F "file=@sample_docs/notes.txt"
+  -F "file=@path/to/notes.txt"
 
 # Upload ảnh kỹ thuật hoặc bản scan (.png, .jpg, .jpeg)
 curl -X POST "http://localhost:8000/api/v1/upload" \
   -H "accept: application/json" \
-  -F "file=@sample_docs/diagram.png"
+  -F "file=@path/to/diagram.png"
 ```
 
 **Đặt câu hỏi Q&A:**

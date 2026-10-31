@@ -41,10 +41,15 @@ def main():
     retriever = LocalRetriever(embedder, store)
     generator = RAGGenerator(provider="mock", min_relevance_score=settings.min_relevance_score)
 
-    # 2. Ingest sample documents
+    # 2. Ingest sample documents (generate dynamically in temp directory)
+    from scripts.generate_sample_docs import generate_sample_documents
+    import tempfile
+
+    temp_dir = tempfile.TemporaryDirectory()
+    generate_sample_documents(output_dir=temp_dir.name)
     sample_files = [
-        "sample_docs/pump_maintenance_guide.pdf",
-        "sample_docs/scanned_circuit_diagram.pdf"
+        str(Path(temp_dir.name) / "pump_maintenance_guide.pdf"),
+        str(Path(temp_dir.name) / "scanned_circuit_diagram.pdf"),
     ]
 
     total_chunks = 0
