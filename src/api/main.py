@@ -52,19 +52,47 @@ async def lifespan(app: FastAPI):
     bm25_retriever = BM25Retriever()
     app.state.bm25_retriever = bm25_retriever
 
-    # Rebuild BM25 index from existing uploads in data/uploads/ (if any)
-    upload_dir = Path(settings.upload_dir)
-    if upload_dir.exists():
-        for file_path in sorted(upload_dir.iterdir(), key=lambda p: p.name.lower()):
-            if file_path.is_file() and not file_path.name.startswith("."):
-                try:
-                    pages = extract_pages_from_document(str(file_path), ocr_engine=app.state.ocr_engine)
-                    for p in pages:
-                        p["doc_name"] = file_path.name
-                    chunks = chunk_document(pages)
-                    bm25_retriever.index_chunks(chunks)
-                except Exception:
-                    pass
+    # Rebuild BM25 index: hydrate instantly from vector_store points (<0.05s) if available
+    seeded = False
+    if hasattr(app.state.vector_store, "client"):
+        try:
+            points, _ = app.state.vector_store.client.scroll(
+                collection_name=settings.qdrant_collection,
+                limit=20000,
+                with_payload=True
+            )
+            if points:
+                from src.models import DocumentChunk
+                chunks_from_store = [
+                    DocumentChunk(
+                        chunk_id=p.payload.get("chunk_id", str(p.id)),
+                        doc_name=p.payload.get("doc_name", "unknown"),
+                        page_number=int(p.payload.get("page_number", 1)),
+                        text=p.payload.get("text", ""),
+                        metadata=p.payload.get("metadata", {})
+                    )
+                    for p in points
+                    if p.payload and p.payload.get("text")
+                ]
+                bm25_retriever.index_chunks(chunks_from_store)
+                seeded = True
+        except Exception:
+            seeded = False
+
+    # Fallback: extract from raw uploads only if vector store was empty
+    if not seeded:
+        upload_dir = Path(settings.upload_dir)
+        if upload_dir.exists():
+            for file_path in sorted(upload_dir.iterdir(), key=lambda p: p.name.lower()):
+                if file_path.is_file() and not file_path.name.startswith("."):
+                    try:
+                        pages = extract_pages_from_document(str(file_path), ocr_engine=app.state.ocr_engine)
+                        for p in pages:
+                            p["doc_name"] = file_path.name
+                        chunks = chunk_document(pages)
+                        bm25_retriever.index_chunks(chunks)
+                    except Exception:
+                        pass
 
     # Hybrid Retriever combining dense and sparse via RRF
     hybrid_retriever = HybridRetriever(
