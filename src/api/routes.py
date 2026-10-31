@@ -7,10 +7,12 @@ from typing import Any, Dict
 from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 from src.config import settings
 from src.ingestion.chunker import chunk_document
-from src.ingestion.pdf_extractor import extract_pages_from_pdf
+from src.ingestion.document_extractor import extract_pages_from_document
 from src.models import QARequest, QAResponse
 
 router = APIRouter(prefix="/api/v1")
+
+SUPPORTED_EXTENSIONS = {".pdf", ".docx", ".txt", ".png", ".jpg", ".jpeg"}
 
 
 @router.get(
@@ -33,20 +35,23 @@ def health(request: Request) -> Dict[str, Any]:
 @router.post(
     "/upload",
     tags=["Tải lên tài liệu (Ingestion)"],
-    summary="Tải lên tài liệu PDF để bóc tách text/OCR và đánh chỉ mục vector"
+    summary="Tải lên tài liệu kỹ thuật để bóc tách text/OCR và đánh chỉ mục vector"
 )
 async def upload_document(
     request: Request,
     file: UploadFile = File(...)
 ) -> Dict[str, Any]:
-    """Tải lên tài liệu PDF kỹ thuật. Hệ thống sẽ:
-    1. Trích xuất text kỹ thuật số qua PyMuPDF.
-    2. Tự động nhận diện trang scan/ảnh và kích hoạt RapidOCR fallback.
-    3. Phân đoạn ngữ nghĩa (chunking) bảo toàn số trang.
-    4. Sinh embedding và lưu trữ vào Qdrant Cloud.
+    """Tải lên tài liệu kỹ thuật (PDF, DOCX, TXT, PNG, JPG, JPEG). Hệ thống sẽ:
+    1. Trích xuất text kỹ thuật số hoặc OCR tuỳ định dạng.
+    2. Phân đoạn ngữ nghĩa (chunking) bảo toàn số trang.
+    3. Sinh embedding và lưu trữ vào Qdrant Cloud.
     """
-    if not file.filename.lower().endswith(".pdf"):
-        raise HTTPException(status_code=400, detail="Only PDF documents are supported.")
+    ext = Path(file.filename or "").suffix.lower()
+    if ext not in SUPPORTED_EXTENSIONS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported file format: {ext}. Supported formats: {', '.join(sorted(SUPPORTED_EXTENSIONS))}"
+        )
 
     retriever = getattr(request.app.state, "retriever", None)
     ocr_engine = getattr(request.app.state, "ocr_engine", None)
@@ -55,12 +60,12 @@ async def upload_document(
         raise HTTPException(status_code=503, detail="Retriever service not initialized.")
 
     # Save uploaded file to temporary path
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+    with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp:
         shutil.copyfileobj(file.file, tmp)
         tmp_path = tmp.name
 
     try:
-        pages = extract_pages_from_pdf(tmp_path, ocr_engine=ocr_engine)
+        pages = extract_pages_from_document(tmp_path, ocr_engine=ocr_engine)
         # Update doc_name to original filename
         for p in pages:
             p["doc_name"] = file.filename

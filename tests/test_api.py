@@ -2,7 +2,9 @@
 import io
 import pymupdf
 import pytest
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
+from PIL import Image
+import docx
 from fastapi.testclient import TestClient
 from src.api.main import app
 from src.retrieval.base import BaseRetriever
@@ -78,3 +80,68 @@ def test_query_returns_503_on_grpc_disconnection(client):
         assert "Retrieval failure" in response.json()["detail"]
     finally:
         app.state.retriever = original_retriever
+
+
+def test_upload_txt_endpoint(client):
+    txt_content = "Tai lieu huong dan may nen khi cong nghiep. Van hanh ap luc tieu chuan 8 bar."
+    response = client.post(
+        "/api/v1/upload",
+        files={"file": ("huong_dan.txt", io.BytesIO(txt_content.encode("utf-8")), "text/plain")}
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "success"
+    assert data["filename"] == "huong_dan.txt"
+    assert data["pages_extracted"] >= 1
+    assert data["chunks_indexed"] >= 1
+
+
+def test_upload_png_endpoint(client):
+    img = Image.new("RGB", (100, 50), color=(255, 255, 255))
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    buf.seek(0)
+
+    with patch.object(app.state.ocr_engine, "extract_text_from_image", return_value="Thong so so do mach dien"):
+        response = client.post(
+            "/api/v1/upload",
+            files={"file": ("mach_dien.png", buf, "image/png")}
+        )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "success"
+    assert data["filename"] == "mach_dien.png"
+    assert data["pages_extracted"] == 1
+    assert data["pages_scanned_ocr"] == 1
+    assert data["chunks_indexed"] >= 1
+
+
+def test_upload_docx_endpoint(client):
+    doc = docx.Document()
+    doc.add_paragraph("Thong so ky thuat may bien ap 110kV.")
+    buf = io.BytesIO()
+    doc.save(buf)
+    buf.seek(0)
+
+    response = client.post(
+        "/api/v1/upload",
+        files={"file": ("bien_ap.docx", buf, "application/vnd.openxmlformats-officedocument.wordprocessingml.document")}
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "success"
+    assert data["filename"] == "bien_ap.docx"
+    assert data["pages_extracted"] >= 1
+    assert data["chunks_indexed"] >= 1
+
+
+def test_upload_unsupported_format_returns_400(client):
+    zip_bytes = b"PK\x03\x04fake_zip_content"
+    response = client.post(
+        "/api/v1/upload",
+        files={"file": ("archive.zip", io.BytesIO(zip_bytes), "application/zip")}
+    )
+    assert response.status_code == 400
+    data = response.json()
+    assert "Unsupported file format" in data["detail"]
+
