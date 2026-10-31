@@ -1,6 +1,6 @@
 # Document Q&A Assistant — Chatbot Hỏi Đáp Tài Liệu Kỹ Thuật
 
-Hệ thống Chatbot hỏi đáp tài liệu kỹ thuật chuyên nghiệp, xử lý tài liệu PDF (cả văn bản số và tài liệu scan qua OCR), chunking bảo toàn metadata số trang, tìm kiếm tương đồng vector với Qdrant, RAG pipeline với trích dẫn chính xác và cơ chế từ chối (Abstention) chống hallucination, benchmark định lượng Recall@K, và tách module Retrieval thành microservice qua gRPC.
+Hệ thống Chatbot hỏi đáp tài liệu kỹ thuật chuyên nghiệp, xử lý tài liệu đa định dạng (PDF cả văn bản số và tài liệu scan qua OCR, DOCX, TXT, PNG, JPG, JPEG), hỗ trợ tải lên hàng loạt (batch upload), chunking bảo toàn metadata số trang, tìm kiếm tương đồng vector với Qdrant, RAG pipeline với trích dẫn chính xác và cơ chế từ chối (Abstention) chống hallucination, benchmark định lượng Recall@K, và tách module Retrieval thành microservice qua gRPC.
 
 ---
 
@@ -24,9 +24,10 @@ Hệ thống tuân thủ kiến trúc Clean / Hexagonal Modular Monorepo:
               v (Ingestion)                                 v (Retrieval: Local or gRPC)
 +-----------------------------+               +-----------------------------+
 |    Ingestion Pipeline       |               |     BaseRetriever Interface  |
-|  - PyMuPDF Extractor        |               +--------------+--------------+
-|  - RapidOCR Fallback Engine |                              |
-|  - Semantic Chunker         |               +--------------+--------------+
+|  - Unified DocumentExtractor|               +--------------+--------------+
+|  - PyMuPDF / RapidOCR (PDF) |                              |
+|  - python-docx / txt / img  |               +--------------+--------------+
+|  - Semantic Chunker         |               |                             |
 +--------------+--------------+               |                             |
                |                              v (Mode: local)               v (Mode: grpc)
                |                       +--------------+              +---------------+
@@ -43,30 +44,36 @@ Hệ thống tuân thủ kiến trúc Clean / Hexagonal Modular Monorepo:
 
 ## 2. Các chức năng chính (Core Features)
 
-1. **Document Processing & OCR Fallback**:
-   - Tự động nhận diện trang văn bản số (digital text) qua PyMuPDF.
-   - Khi trang PDF có mật độ ký tự thấp (< 50 ký tự, như sơ đồ, bản vẽ, tài liệu scan), hệ thống tự động render sang ảnh 300 DPI và kích hoạt **RapidOCR** để trích xuất text.
-2. **Chunking bảo toàn số trang**:
+1. **Multi-format Document Processing & OCR Fallback**:
+   - Hỗ trợ đa dạng định dạng tài liệu kỹ thuật: **PDF** (`.pdf`), **Word** (`.docx`), **Text** (`.txt`), và **Ảnh** (`.png`, `.jpg`, `.jpeg`).
+   - **PDF (PyMuPDF + RapidOCR)**: Tự động trích xuất trang văn bản số (digital text). Nếu mật độ văn bản thấp (< 50 ký tự, như tài liệu scan, bản vẽ, sơ đồ), tự động render ảnh 300 DPI và kích hoạt **RapidOCR** để nhận diện ký tự quang học.
+   - **Word (DOCX)**: Trích xuất đoạn văn bản cấu trúc qua `python-docx` kết hợp phân trang logic (logical pagination ~500 từ/trang).
+   - **Text (TXT)**: Đọc văn bản thuần hỗ trợ fallback bảng mã (UTF-8, Latin-1) kèm phân trang logic (~3000 ký tự/trang).
+   - **Ảnh kỹ thuật (PNG, JPG, JPEG)**: Nhận diện nội dung chữ trực tiếp từ ảnh qua RapidOCR engine (gán trang mặc định là 1).
+2. **Multi-file Batch Upload & Tiến trình trực quan**:
+   - Tải lên đồng thời nhiều tệp tài liệu trong một lượt thao tác (cả qua REST API và giao diện Web).
+   - Tích hợp thanh tiến trình xử lý trực tiếp (`st.progress`) với thông báo tổng kết rõ ràng về số file thành công, số file lỗi, và tổng số chunk đã được index vào vector database.
+3. **Chunking bảo toàn số trang**:
    - Phân chia văn bản thành các đoạn (chunks) có overlap.
-   - Giữ nguyên `doc_name` và `page_number` (1-indexed) ở từng chunk.
-3. **Vector Database (Qdrant Embedded)**:
+   - Giữ nguyên `doc_name` và `page_number` (1-indexed) ở từng chunk bất kể tài liệu là PDF, DOCX, TXT hay Ảnh.
+4. **Vector Database (Qdrant Embedded)**:
    - Sử dụng model `sentence-transformers/all-MiniLM-L6-v2` tạo vector 384 chiều chuẩn hóa.
    - Lưu trữ trực tiếp trên file cục bộ `data/qdrant_storage/` không bắt buộc chạy Docker.
-4. **RAG Guardrails (Citations & Abstention)**:
+5. **RAG Guardrails (Citations & Abstention)**:
    - Trả lời luôn kèm nguồn gốc: `[Tài liệu: <doc_name>, Trang <page_number>]`.
    - Cơ chế từ chối dứt khoát khi tài liệu không chứa đủ dữ kiện: `"Tôi không tìm thấy thông tin này trong tài liệu được cung cấp."` (ngăn chặn hallucination).
-5. **Evaluation Suite (Recall@K Benchmark)**:
+6. **Evaluation Suite (Recall@K Benchmark)**:
    - Bộ dữ liệu Ground Truth kiểm thử 15 câu hỏi kỹ thuật và out-of-scope.
    - Đo lường tự động: `Recall@1`, `Recall@3`, `Recall@5`, `Recall@10` và `Abstention Accuracy`.
-6. **gRPC Retrieval Service**:
+7. **gRPC Retrieval Service**:
    - Định nghĩa API hợp đồng bằng Protocol Buffers (`proto/retrieval.proto`).
    - Cung cấp `start_grpc_server` và `GrpcRetriever` adapter. Chuyển đổi giữa chạy local và gRPC chỉ bằng 1 biến môi trường `RETRIEVAL_MODE=grpc`.
-7. **Giao diện Web Trực Quan (Streamlit ChatGPT-style UI)**:
+8. **Giao diện Web Trực Quan (Streamlit ChatGPT-style UI)**:
    - Giao diện chat phong cách ChatGPT hiện đại (`st.chat_message`, `st.chat_input`).
    - Gợi ý câu hỏi bắt đầu (Prompt Suggestions) nhanh chóng.
    - Hiển thị trích dẫn tài liệu minh bạch dạng badge (`📄 [doc_name, Trang X]`).
    - Chi tiết bằng chứng truy xuất (Evidence chunks) với điểm tương đồng (Cosine similarity score).
-   - Sidebar quản lý: Nạp tài liệu PDF trực tiếp, điều chỉnh tham số `top_k`, kiểm tra trạng thái live backend API và nút tạo đoạn chat mới.
+   - Sidebar quản lý: Nạp một hoặc nhiều tài liệu đồng thời (PDF, DOCX, TXT, PNG, JPG, JPEG) với thanh tiến trình trực quan, điều chỉnh tham số `top_k`, kiểm tra trạng thái live backend API và nút tạo đoạn chat mới.
 
 
 ---
@@ -112,11 +119,27 @@ uvicorn src.api.main:app --host 0.0.0.0 --port 8000 --reload
 - Health Check: `GET http://localhost:8000/api/v1/health`
 
 ### 5. Sử dụng API
-**Upload tài liệu PDF:**
+**Upload tài liệu (Hỗ trợ `.pdf`, `.docx`, `.txt`, `.png`, `.jpg`, `.jpeg`):**
 ```bash
+# Upload file PDF
 curl -X POST "http://localhost:8000/api/v1/upload" \
   -H "accept: application/json" \
   -F "file=@sample_docs/pump_maintenance_guide.pdf"
+
+# Upload file Word (.docx)
+curl -X POST "http://localhost:8000/api/v1/upload" \
+  -H "accept: application/json" \
+  -F "file=@sample_docs/specification.docx"
+
+# Upload file Text (.txt)
+curl -X POST "http://localhost:8000/api/v1/upload" \
+  -H "accept: application/json" \
+  -F "file=@sample_docs/notes.txt"
+
+# Upload ảnh kỹ thuật hoặc bản scan (.png, .jpg, .jpeg)
+curl -X POST "http://localhost:8000/api/v1/upload" \
+  -H "accept: application/json" \
+  -F "file=@sample_docs/diagram.png"
 ```
 
 **Đặt câu hỏi Q&A:**
@@ -140,7 +163,8 @@ Sau khi khởi động FastAPI Backend (bước 4), mở một tab terminal mớ
   - Sidebar bên trái:
     - 🟢 Xem trạng thái kết nối tới FastAPI Backend theo thời gian thực.
     - ⚙️ Kéo thanh trượt điều chỉnh độ sâu truy xuất `top_k` (từ 1 đến 10).
-    - 📁 Tải tệp PDF kỹ thuật mới trực tiếp vào hệ thống với thông báo số trang/chunks.
+    - 📁 **Tải lên hàng loạt tài liệu (Multi-file Batch Upload)**: Kéo thả hoặc chọn cùng lúc nhiều tệp định dạng `.pdf`, `.docx`, `.txt`, `.png`, `.jpg`, `.jpeg`.
+    - 📊 **Thanh tiến trình trực quan (Live Progress Tracking)**: Theo dõi tiến độ index từng tệp theo thời gian thực kèm báo cáo tổng kết số tệp thành công / thất bại và tổng số chunk đã được nạp.
     - ➕ Bấm "Cuộc trò chuyện mới" để xóa lịch sử và bắt đầu phiên hỏi đáp mới.
   - Phản hồi từ Bot: Kèm trích dẫn tài liệu cụ thể và hộp mở rộng `🔍 Chi tiết đoạn trích dẫn (Evidence Chunks)` hiển thị điểm tương đồng vector.
 
