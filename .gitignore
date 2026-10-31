@@ -4,6 +4,7 @@ __pycache__/
 .pytest_cache/
 *.egg-info/
 data/qdrant_storage/
+data/uploads/
 .env
 .DS_Store
 .agents/
