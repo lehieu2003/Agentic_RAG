@@ -79,7 +79,36 @@ async def lifespan(app: FastAPI):
         except Exception:
             seeded = False
 
-    # Fallback: extract from raw uploads only if vector store was empty
+    # Check local on-disk storage as secondary instant hydration source
+    if not seeded:
+        try:
+            from qdrant_client import QdrantClient
+            local_client = QdrantClient(path=settings.qdrant_path)
+            local_points, _ = local_client.scroll(
+                collection_name=settings.qdrant_collection,
+                limit=20000,
+                with_payload=True
+            )
+            if local_points:
+                from src.models import DocumentChunk
+                chunks_from_store = [
+                    DocumentChunk(
+                        chunk_id=p.payload.get("chunk_id", str(p.id)),
+                        doc_name=p.payload.get("doc_name", "unknown"),
+                        page_number=int(p.payload.get("page_number", 1)),
+                        text=p.payload.get("text", ""),
+                        metadata=p.payload.get("metadata", {})
+                    )
+                    for p in local_points
+                    if p.payload and p.payload.get("text")
+                ]
+                bm25_retriever.index_chunks(chunks_from_store)
+                seeded = True
+            local_client.close()
+        except Exception:
+            pass
+
+    # Fallback: extract from raw uploads only if vector store was completely empty
     if not seeded:
         upload_dir = Path(settings.upload_dir)
         if upload_dir.exists():
@@ -171,3 +200,8 @@ def root():
     """Tự động chuyển hướng từ trang chủ sang Swagger UI."""
     from fastapi.responses import RedirectResponse
     return RedirectResponse(url="/docs")
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("src.api.main:app", host="0.0.0.0", port=8000, reload=True)
