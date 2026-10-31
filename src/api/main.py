@@ -1,14 +1,20 @@
 """FastAPI application entrypoint with lifespan dependency wiring."""
 
 from contextlib import asynccontextmanager
+from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from src.api.routes import router
 from src.config import settings
+from src.ingestion.chunker import chunk_document
+from src.ingestion.document_extractor import extract_pages_from_document
 from src.ingestion.ocr_engine import OcrEngine
 from src.rag.generator import RAGGenerator
 from src.rag.agent import AgenticRAG
+from src.retrieval.bm25 import BM25Retriever
+from src.retrieval.hybrid import HybridRetriever
 from src.retrieval.local import LocalRetriever
+from src.retrieval.reranker import CrossEncoderReranker
 from src.vector_store.embedding import EmbeddingModel
 from src.vector_store.qdrant_store import QdrantVectorStore
 
@@ -28,18 +34,49 @@ async def lifespan(app: FastAPI):
         api_key=settings.qdrant_api_key if settings.qdrant_api_key else None
     )
 
-    # 3. Retriever initialization
+    # 3. Dense & Sparse Hybrid Retriever initialization
     if settings.retrieval_mode == "grpc":
         from src.retrieval.grpc_client import GrpcRetriever
-        app.state.retriever = GrpcRetriever(
+        dense_retriever = GrpcRetriever(
             host=settings.grpc_host,
             port=settings.grpc_port
         )
     else:
-        app.state.retriever = LocalRetriever(
+        dense_retriever = LocalRetriever(
             embedding_model=app.state.embedding_model,
             vector_store=app.state.vector_store
         )
+    app.state.dense_retriever = dense_retriever
+
+    # Sparse BM25 Retriever
+    bm25_retriever = BM25Retriever()
+    app.state.bm25_retriever = bm25_retriever
+
+    # Rebuild BM25 index from existing uploads in data/uploads/ (if any)
+    upload_dir = Path(settings.upload_dir)
+    if upload_dir.exists():
+        for file_path in sorted(upload_dir.iterdir(), key=lambda p: p.name.lower()):
+            if file_path.is_file() and not file_path.name.startswith("."):
+                try:
+                    pages = extract_pages_from_document(str(file_path), ocr_engine=app.state.ocr_engine)
+                    for p in pages:
+                        p["doc_name"] = file_path.name
+                    chunks = chunk_document(pages)
+                    bm25_retriever.index_chunks(chunks)
+                except Exception:
+                    pass
+
+    # Hybrid Retriever combining dense and sparse via RRF
+    hybrid_retriever = HybridRetriever(
+        dense_retriever=dense_retriever,
+        sparse_retriever=bm25_retriever,
+        rrf_k=settings.hybrid_rrf_k
+    )
+    app.state.retriever = hybrid_retriever
+
+    # Cross-Encoder Reranker
+    reranker = CrossEncoderReranker(model_name=settings.reranker_model)
+    app.state.reranker = reranker
 
     # 4. LLM client & RAG Generator
     llm_client = None
@@ -65,6 +102,7 @@ async def lifespan(app: FastAPI):
     )
     app.state.agent = AgenticRAG(
         retriever=app.state.retriever,
+        reranker=app.state.reranker,
         llm_client=llm_client,
         provider=settings.llm_provider,
         model_name=active_model,
@@ -105,4 +143,3 @@ def root():
     """Tự động chuyển hướng từ trang chủ sang Swagger UI."""
     from fastapi.responses import RedirectResponse
     return RedirectResponse(url="/docs")
-

@@ -188,3 +188,174 @@ def test_agent_expand_query_includes_unaccented_vietnamese():
 
     variations = agent.expand_query("phương pháp đo diện tích vận tốc")
     assert any("phuong phap do dien tich van toc" in v.lower() for v in variations)
+
+
+def test_agent_mixed_intent_greeting_stripping():
+    """Verify that greetings in mixed queries are stripped and search proceeds with clean_question."""
+    mock_retriever = MagicMock(spec=BaseRetriever)
+    pump_chunk = _create_chunk("pump.pdf", 1, "c1", "Máy bơm TKE-380 có cấu tạo gồm trục và cánh bơm.", score=0.90)
+    searched_queries = []
+
+    def mock_search(query: str, top_k: int = 5):
+        searched_queries.append(query)
+        return [pump_chunk]
+
+    mock_retriever.search.side_effect = mock_search
+    agent = AgenticRAG(retriever=mock_retriever, llm_client=None)
+
+    resp = agent.answer("Chào bạn, máy bơm TKE-380 có cấu tạo gì?", top_k=3)
+    assert resp.abstained is False
+    assert len(resp.citations) >= 1
+    assert resp.citations[0].doc_name == "pump.pdf"
+    # Verify retriever was called with queries derived from the cleaned question, NOT with "Chào bạn"
+    assert len(searched_queries) > 0
+    assert any("máy bơm tke-380" in q.lower() for q in searched_queries)
+    assert not any(q.strip().lower().startswith("chào bạn,") for q in searched_queries)
+    assert any("chuẩn hóa" in s.lower() or "tke-380" in s.lower() for s in resp.reasoning_steps)
+
+
+def test_relevance_and_sufficiency_grader_triggers_rewrite_when_insufficient():
+    """Verify grader node identifies insufficient context and triggers feedback-guided rewrite."""
+    mock_retriever = MagicMock(spec=BaseRetriever)
+    mock_llm = MagicMock()
+
+    chunk_vague = _create_chunk("manual.pdf", 2, "c1", "Máy bơm dùng trong công nghiệp.", score=0.60)
+    chunk_full = _create_chunk("manual.pdf", 5, "c2", "Cấu tạo máy bơm TKE-380 gồm động cơ 15kW, trục thép và 2 cánh bơm.", score=0.92)
+
+    def mock_search(query: str, top_k: int = 5):
+        if "cấu tạo" in query.lower() and "trục" in query.lower():
+            return [chunk_full]
+        return [chunk_vague]
+
+    mock_retriever.search.side_effect = mock_search
+
+    call_counts = {"grade": 0}
+
+    def mock_generate_content(model: str, contents: str):
+        mock_resp = MagicMock()
+        if "đánh giá ngữ cảnh" in contents.lower() or "sufficiency" in contents.lower():
+            call_counts["grade"] += 1
+            if call_counts["grade"] == 1:
+                mock_resp.text = '{"is_sufficient": false, "missing_aspects": "thiếu cấu tạo trục và cánh"}'
+            else:
+                mock_resp.text = '{"is_sufficient": true, "missing_aspects": ""}'
+        elif "viết lại" in contents.lower() or "rewrite" in contents.lower():
+            mock_resp.text = "máy bơm TKE-380 cấu tạo trục"
+        elif "biến thể tìm kiếm" in contents.lower():
+            mock_resp.text = "máy bơm TKE-380\npump TKE-380"
+        else:
+            mock_resp.text = "Cấu tạo gồm động cơ, trục và 2 cánh [Tài liệu: manual.pdf, Trang 5]."
+        return mock_resp
+
+    mock_llm.models.generate_content.side_effect = mock_generate_content
+
+    agent = AgenticRAG(retriever=mock_retriever, llm_client=mock_llm, provider="gemini", max_retries=1)
+    resp = agent.answer("máy bơm TKE-380 cấu tạo thế nào?", top_k=3)
+
+    assert resp.abstained is False
+    assert len(resp.citations) == 1
+    assert resp.citations[0].doc_name == "manual.pdf"
+    assert resp.citations[0].page_number == 5
+    assert call_counts["grade"] == 2
+    assert any("thiếu cấu tạo" in s.lower() or "chưa đủ" in s.lower() for s in resp.reasoning_steps)
+
+
+def test_feedback_guided_rewrite_incorporates_grader_reason():
+    """Verify that rewrite_query receives and incorporates grader feedback into prompt."""
+    mock_retriever = MagicMock(spec=BaseRetriever)
+    mock_llm = MagicMock()
+
+    prompts_captured = []
+
+    def mock_generate_content(model: str, contents: str):
+        prompts_captured.append(contents)
+        mock_resp = MagicMock()
+        if "đánh giá ngữ cảnh" in contents.lower() or "sufficiency" in contents.lower():
+            mock_resp.text = '{"is_sufficient": false, "missing_aspects": "thiếu thông số áp lực danh định"}'
+        elif "viết lại" in contents.lower() or "truy vấn" in contents.lower():
+            mock_resp.text = "áp suất danh định máy bơm TKE"
+        else:
+            mock_resp.text = "áp suất máy bơm\náp lực làm việc"
+        return mock_resp
+
+    mock_llm.models.generate_content.side_effect = mock_generate_content
+    agent = AgenticRAG(retriever=mock_retriever, llm_client=mock_llm, provider="gemini", max_retries=0)
+
+    agent.rewrite_query(
+        question="máy bơm TKE",
+        attempted_queries=["máy bơm TKE"],
+        missing_aspect="thiếu thông số áp lực danh định"
+    )
+
+    rewrite_prompts = [p for p in prompts_captured if "viết lại" in p.lower() or "truy vấn" in p.lower()]
+    assert len(rewrite_prompts) >= 1
+    assert "thiếu thông số áp lực danh định" in rewrite_prompts[0]
+
+
+def test_citation_self_correction_loop_regenerates_with_feedback():
+    """Verify citation failure triggers 1-time regeneration loop with error feedback directive."""
+    mock_retriever = MagicMock(spec=BaseRetriever)
+    mock_llm = MagicMock()
+
+    retrieved_chunk = _create_chunk("pump.pdf", 3, "c1", "Áp suất tối đa 16 bar.", score=0.90)
+    mock_retriever.search.return_value = [retrieved_chunk]
+
+    generate_prompts = []
+    gen_call = {"count": 0}
+
+    def mock_generate_content(model: str, contents: str):
+        mock_resp = MagicMock()
+        if "đánh giá ngữ cảnh" in contents.lower() or "sufficiency" in contents.lower():
+            mock_resp.text = '{"is_sufficient": true, "missing_aspects": ""}'
+        elif "biến thể tìm kiếm" in contents.lower():
+            mock_resp.text = "áp suất máy bơm\npump pressure"
+        else:
+            generate_prompts.append(contents)
+            gen_call["count"] += 1
+            if gen_call["count"] == 1:
+                mock_resp.text = "Áp suất máy bơm là 16 bar [Tài liệu: fake_manual.pdf, Trang 99]."
+            else:
+                mock_resp.text = "Áp suất máy bơm là 16 bar [Tài liệu: pump.pdf, Trang 3]."
+        return mock_resp
+
+    mock_llm.models.generate_content.side_effect = mock_generate_content
+
+    agent = AgenticRAG(retriever=mock_retriever, llm_client=mock_llm, provider="gemini", max_gen_retries=1)
+    resp = agent.answer("áp suất máy bơm?", top_k=3)
+
+    assert resp.abstained is False
+    assert len(resp.citations) == 1
+    assert resp.citations[0].doc_name == "pump.pdf"
+    assert resp.citations[0].page_number == 3
+    assert gen_call["count"] == 2
+    assert len(generate_prompts) == 2
+    assert "fake_manual.pdf" in generate_prompts[1] or "Lưu ý" in generate_prompts[1]
+
+
+def test_abstention_when_retries_exhausted_or_invalid_citations_persist():
+    """Verify safe abstention when retrieval retries exhausted or invalid citations persist."""
+    mock_retriever = MagicMock(spec=BaseRetriever)
+    mock_llm = MagicMock()
+
+    retrieved_chunk = _create_chunk("pump.pdf", 3, "c1", "Áp suất tối đa 16 bar.", score=0.90)
+    mock_retriever.search.return_value = [retrieved_chunk]
+
+    def mock_generate_content(model: str, contents: str):
+        mock_resp = MagicMock()
+        if "đánh giá ngữ cảnh" in contents.lower() or "sufficiency" in contents.lower():
+            mock_resp.text = '{"is_sufficient": true, "missing_aspects": ""}'
+        elif "biến thể tìm kiếm" in contents.lower():
+            mock_resp.text = "áp suất máy bơm"
+        else:
+            mock_resp.text = "Áp suất máy bơm là 16 bar [Tài liệu: ghost_manual.pdf, Trang 99]."
+        return mock_resp
+
+    mock_llm.models.generate_content.side_effect = mock_generate_content
+
+    agent = AgenticRAG(retriever=mock_retriever, llm_client=mock_llm, provider="gemini", max_gen_retries=1)
+    resp = agent.answer("áp suất máy bơm?", top_k=3)
+
+    assert resp.abstained is True
+    assert ABSTAIN_PHRASE in resp.answer
+    assert len(resp.citations) == 0
+
