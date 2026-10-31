@@ -66,7 +66,16 @@ def render_sidebar(api_client: ApiClient) -> Dict[str, Any]:
                                 size_str = f"{fsize} B"
                         else:
                             size_str = str(fsize)
-                        st.markdown(f"📄 **{fname}** (`{size_str}`)")
+
+                        cols = st.columns([0.82, 0.18])
+                        with cols[0]:
+                            st.markdown(f"📄 **{fname}** (`{size_str}`)")
+                        if len(cols) > 1:
+                            with cols[1]:
+                                if st.button("🗑️", key=f"del_{fname}", help=f"Xoá {fname}"):
+                                    if api_client.delete_file(fname):
+                                        st.toast(f"Đã xoá tài liệu {fname}")
+                                        st.rerun()
                     else:
                         st.markdown(f"📄 **{f_info}**")
             else:

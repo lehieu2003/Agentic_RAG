@@ -118,3 +118,21 @@ class HybridRetriever(BaseRetriever):
             RetrievalResult(chunk=chunk_map[cid], score=rrf_scores[cid])
             for cid in sorted_chunk_ids[:top_k]
         ]
+
+    def delete_by_doc_name(self, doc_name: str) -> int:
+        """Delete all chunks belonging to doc_name across both dense and sparse stores."""
+        dense_del = 0
+        if hasattr(self.dense_retriever, "delete_by_doc_name"):
+            dense_del = self.dense_retriever.delete_by_doc_name(doc_name)
+
+        sparse_del = 0
+        if hasattr(self.sparse_retriever, "delete_by_doc_name"):
+            sparse_del = self.sparse_retriever.delete_by_doc_name(doc_name)
+
+        return max(dense_del, sparse_del)
+
+    def get_indexed_doc_names(self) -> Set[str]:
+        """Return distinct document names currently indexed in the primary dense store."""
+        if hasattr(self.dense_retriever, "get_indexed_doc_names"):
+            return self.dense_retriever.get_indexed_doc_names()
+        return set()

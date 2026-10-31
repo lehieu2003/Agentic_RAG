@@ -73,8 +73,18 @@ async def upload_document(
     upload_dir = _get_upload_dir()
     target_path = upload_dir / safe_filename
 
-    # Deduplication check: if file already exists in persistent storage, skip indexing
-    if target_path.exists():
+    retriever = getattr(request.app.state, "retriever", None)
+    ocr_engine = getattr(request.app.state, "ocr_engine", None)
+
+    if retriever is None:
+        raise HTTPException(status_code=503, detail="Retriever service not initialized.")
+
+    # Deduplication check: only skip if document actually exists in active vector store!
+    active_docs = set()
+    if hasattr(retriever, "get_indexed_doc_names"):
+        active_docs = retriever.get_indexed_doc_names()
+
+    if safe_filename in active_docs and target_path.exists():
         return UploadResponse(
             filename=safe_filename,
             pages_extracted=0,
@@ -84,12 +94,6 @@ async def upload_document(
             status="already_exists",
             message=f"Tài liệu '{safe_filename}' đã tồn tại trên hệ thống. Bỏ qua nạp trùng lặp."
         )
-
-    retriever = getattr(request.app.state, "retriever", None)
-    ocr_engine = getattr(request.app.state, "ocr_engine", None)
-
-    if retriever is None:
-        raise HTTPException(status_code=503, detail="Retriever service not initialized.")
 
     # Atomic file write: save to temporary file first, then rename to target_path
     tmp_target = target_path.with_suffix(f"{ext}.tmp_{uuid.uuid4().hex[:8]}")
@@ -150,12 +154,25 @@ async def upload_document(
     tags=["Quản lý tài liệu (Files)"],
     summary="Danh sách tất cả các tài liệu đã được lưu trữ vĩnh viễn"
 )
-def list_files() -> List[FileSummary]:
-    """Liệt kê danh sách toàn bộ tài liệu đã lưu trên hệ thống kèm metadata kích thước và thời gian tải lên."""
+def list_files(request: Request) -> List[FileSummary]:
+    """Liệt kê danh sách tài liệu đang thực sự được đánh chỉ mục trong hệ thống.
+    Đồng bộ với Qdrant Vector Store: nếu collection bị xoá hoặc rỗng, các file mồ côi
+    trên ổ cứng sẽ tự động được dọn dẹp để đảm bảo tính nhất quán tuyệt đối.
+    """
     upload_dir = _get_upload_dir()
+    retriever = getattr(request.app.state, "retriever", None)
+
+    active_docs = set()
+    if retriever is not None and hasattr(retriever, "get_indexed_doc_names"):
+        active_docs = retriever.get_indexed_doc_names()
+
     files: List[FileSummary] = []
     for f in sorted(upload_dir.iterdir(), key=lambda p: p.name.lower()):
         if f.is_file() and not f.name.startswith("."):
+            if f.name not in active_docs:
+                f.unlink(missing_ok=True)
+                continue
+
             stat = f.stat()
             files.append(
                 FileSummary(
@@ -166,6 +183,42 @@ def list_files() -> List[FileSummary]:
                 )
             )
     return files
+
+
+@router.delete(
+    "/files/{filename:path}",
+    tags=["Quản lý tài liệu (Files)"],
+    summary="Xoá tài liệu khỏi hệ thống và vector database"
+)
+def delete_document(request: Request, filename: str) -> Dict[str, Any]:
+    """Xoá hoàn toàn tài liệu:
+    1. Xoá tất cả vector và chunk trong Qdrant.
+    2. Xoá chunk trong BM25.
+    3. Xoá file vật lý trong data/uploads/.
+    """
+    safe_filename = Path(filename).name
+    if not safe_filename or safe_filename in {".", ".."}:
+        raise HTTPException(status_code=400, detail="Invalid filename")
+
+    upload_dir = _get_upload_dir()
+    file_path = upload_dir / safe_filename
+
+    retriever = getattr(request.app.state, "retriever", None)
+    deleted_chunks = 0
+    if retriever is not None and hasattr(retriever, "delete_by_doc_name"):
+        deleted_chunks = retriever.delete_by_doc_name(safe_filename)
+
+    file_existed = file_path.is_file()
+    if file_existed:
+        file_path.unlink(missing_ok=True)
+
+    return {
+        "status": "success",
+        "filename": safe_filename,
+        "file_deleted": file_existed,
+        "chunks_removed": deleted_chunks,
+        "message": f"Đã xoá hoàn toàn tài liệu '{safe_filename}' khỏi hệ thống."
+    }
 
 
 @router.get(

@@ -50,12 +50,52 @@ class QdrantVectorStore:
 
     def _ensure_collection(self) -> None:
         """Create the collection if it does not exist."""
-        existing = [c.name for c in self.client.get_collections().collections]
-        if self.collection_name not in existing:
-            self.client.create_collection(
+        try:
+            existing = [c.name for c in self.client.get_collections().collections]
+            if self.collection_name not in existing:
+                self.client.create_collection(
+                    collection_name=self.collection_name,
+                    vectors_config=VectorParams(size=self.vector_size, distance=Distance.COSINE)
+                )
+        except Exception:
+            pass
+
+    def get_indexed_doc_names(self) -> set:
+        """Return the set of distinct document names currently indexed."""
+        self._ensure_collection()
+        try:
+            points, _ = self.client.scroll(
                 collection_name=self.collection_name,
-                vectors_config=VectorParams(size=self.vector_size, distance=Distance.COSINE)
+                limit=10000,
+                with_payload=True
             )
+            doc_names = set()
+            for p in points:
+                if p.payload and p.payload.get("doc_name"):
+                    doc_names.add(p.payload["doc_name"])
+            return doc_names
+        except Exception:
+            return set()
+
+    def delete_by_doc_name(self, doc_name: str) -> int:
+        """Delete all vectors and payload matching doc_name."""
+        self._ensure_collection()
+        from qdrant_client.http import models
+        try:
+            self.client.delete(
+                collection_name=self.collection_name,
+                points_selector=models.Filter(
+                    must=[
+                        models.FieldCondition(
+                            key="doc_name",
+                            match=models.MatchValue(value=doc_name)
+                        )
+                    ]
+                )
+            )
+            return 1
+        except Exception:
+            return 0
 
     def upsert_chunks_with_vectors(
         self,
@@ -65,6 +105,7 @@ class QdrantVectorStore:
         """Insert or update chunks along with precomputed vectors."""
         if not chunks:
             return 0
+        self._ensure_collection()
 
         points: List[PointStruct] = []
         for chunk, vector in zip(chunks, vectors):
@@ -88,12 +129,16 @@ class QdrantVectorStore:
 
     def search(self, query_vector: List[float], top_k: int = 5) -> List[RetrievalResult]:
         """Perform semantic search for nearest document chunks."""
-        response = self.client.query_points(
-            collection_name=self.collection_name,
-            query=query_vector,
-            limit=top_k,
-            with_payload=True
-        )
+        self._ensure_collection()
+        try:
+            response = self.client.query_points(
+                collection_name=self.collection_name,
+                query=query_vector,
+                limit=top_k,
+                with_payload=True
+            )
+        except Exception:
+            return []
 
         results: List[RetrievalResult] = []
         for scored_point in response.points:

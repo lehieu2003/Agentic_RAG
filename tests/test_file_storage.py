@@ -128,3 +128,31 @@ def test_list_files_endpoint(client):
     doc2_info = next(f for f in data if f["filename"] == "doc2.txt")
     assert doc2_info["size_bytes"] == len(txt_content.encode("utf-8"))
     assert doc2_info["file_type"] == ".txt"
+
+
+def test_delete_file_endpoint(client, tmp_path):
+    upload_dir = tmp_path / "uploads"
+
+    # Upload a document
+    txt_content = "Tài liệu kiểm thử xoá."
+    upload_resp = client.post(
+        "/api/v1/upload",
+        files={"file": ("to_delete.txt", io.BytesIO(txt_content.encode("utf-8")), "text/plain")}
+    )
+    assert upload_resp.status_code == 200
+    assert (upload_dir / "to_delete.txt").is_file()
+
+    # Call DELETE /api/v1/files/to_delete.txt
+    del_resp = client.delete("/api/v1/files/to_delete.txt")
+    assert del_resp.status_code == 200
+    del_data = del_resp.json()
+    assert del_data["status"] == "success"
+    assert del_data["file_deleted"] is True
+
+    # Verify physical file is gone
+    assert not (upload_dir / "to_delete.txt").exists()
+
+    # Verify list_files no longer contains it
+    list_resp = client.get("/api/v1/files")
+    filenames = [f["filename"] for f in list_resp.json()]
+    assert "to_delete.txt" not in filenames

@@ -28,3 +28,11 @@ class BaseRetriever(ABC):
         """
         raise NotImplementedError("Indexing not supported by this retriever implementation.")
 
+    def delete_by_doc_name(self, doc_name: str) -> int:
+        """Delete all chunks belonging to doc_name from the retriever's backend."""
+        return 0
+
+    def get_indexed_doc_names(self) -> set:
+        """Return distinct document names currently indexed in the backend."""
+        return set()
+

@@ -33,3 +33,15 @@ class LocalRetriever(BaseRetriever):
         vectors = self.embedding_model.embed_texts(texts)
         return self.vector_store.upsert_chunks_with_vectors(chunks=chunks, vectors=vectors)
 
+    def delete_by_doc_name(self, doc_name: str) -> int:
+        """Delete all chunks belonging to doc_name from Qdrant vector store."""
+        if hasattr(self.vector_store, "delete_by_doc_name"):
+            return self.vector_store.delete_by_doc_name(doc_name)
+        return 0
+
+    def get_indexed_doc_names(self) -> set:
+        """Return distinct document names currently indexed in Qdrant."""
+        if hasattr(self.vector_store, "get_indexed_doc_names"):
+            return self.vector_store.get_indexed_doc_names()
+        return set()
+

@@ -52,6 +52,23 @@ class ApiClient:
         except Exception:
             return []
 
+    def delete_file(self, filename: str) -> bool:
+        """Delete a document from backend storage and vector index.
+
+        Args:
+            filename: Name of the file to delete.
+
+        Returns:
+            True if deleted successfully, False otherwise.
+        """
+        try:
+            url = f"{self.base_url}/files/{filename}" if self.base_url.endswith("/api/v1") else f"{self.base_url}/api/v1/files/{filename}"
+            with httpx.Client(timeout=self.timeout) as client:
+                resp = client.delete(url)
+                return resp.status_code == 200
+        except Exception:
+            return False
+
     def upload_document(
         self,
         file_bytes: bytes,
