@@ -205,10 +205,10 @@ class AgenticRAG:
         # 3. Self-reflection & Corrective Re-querying
         max_score = max((c.score for c in candidate_chunks), default=0.0)
         retries = 0
-        if max_score < self.min_relevance_score and retries < self.max_retries:
+        while max_score < self.min_relevance_score and retries < self.max_retries:
             steps.append(
                 f"Điểm phù hợp cao nhất ({max_score:.2f}) thấp hơn ngưỡng ({self.min_relevance_score:.2f}). "
-                f"Kích hoạt viết lại truy vấn (Query Rewrite)."
+                f"Kích hoạt viết lại truy vấn (Query Rewrite vòng {retries + 1})."
             )
             rewritten = self.rewrite_query(question, attempted_queries=all_queries)
             all_queries.append(rewritten)
@@ -218,6 +218,7 @@ class AgenticRAG:
             steps.append(f"Truy xuất bổ sung được {len(additional_chunks)} đoạn tài liệu từ truy vấn viết lại")
 
             candidate_chunks = self._merge_chunks(candidate_chunks + additional_chunks, top_k=top_k)
+            max_score = max((c.score for c in candidate_chunks), default=0.0)
             retries += 1
 
         # 4. Check if any chunks pass relevance threshold

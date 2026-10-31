@@ -1,5 +1,7 @@
 """Chat display components and formatting helpers for Streamlit UI."""
 
+import html
+import urllib.parse
 from typing import Any, List, Optional, Union
 import streamlit as st
 
@@ -44,14 +46,18 @@ def format_citation_badge(
         actual_page = page if page is not None else "?"
 
     clean_base = api_base_url.rstrip("/")
+    quoted_doc = urllib.parse.quote(str(actual_doc))
+    escaped_doc = html.escape(str(actual_doc))
+    escaped_page = html.escape(str(actual_page))
+
     if clean_base.endswith("/api/v1"):
-        url = f"{clean_base}/files/{actual_doc}#page={actual_page}"
+        url = f"{clean_base}/files/{quoted_doc}#page={escaped_page}"
     else:
-        url = f"{clean_base}/api/v1/files/{actual_doc}#page={actual_page}"
+        url = f"{clean_base}/api/v1/files/{quoted_doc}#page={escaped_page}"
 
     return (
         f'<a href="{url}" target="_blank" class="citation-badge" '
-        f'title="Mở {actual_doc} tại trang {actual_page}">📄 {actual_doc} (Trang {actual_page}) ↗</a>'
+        f'title="Mở {escaped_doc} tại trang {escaped_page}">📄 {escaped_doc} (Trang {escaped_page}) ↗</a>'
     )
 
 

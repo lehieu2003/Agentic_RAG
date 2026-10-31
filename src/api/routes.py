@@ -2,9 +2,11 @@
 
 from datetime import datetime, timezone
 import mimetypes
+import os
 from pathlib import Path
 import shutil
 from typing import Any, Dict, List
+import uuid
 from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
 from src.config import settings
@@ -89,9 +91,15 @@ async def upload_document(
     if retriever is None:
         raise HTTPException(status_code=503, detail="Retriever service not initialized.")
 
-    # Save uploaded file permanently to target_path
-    with open(target_path, "wb") as f:
-        shutil.copyfileobj(file.file, f)
+    # Atomic file write: save to temporary file first, then rename to target_path
+    tmp_target = target_path.with_suffix(f"{ext}.tmp_{uuid.uuid4().hex[:8]}")
+    try:
+        with open(tmp_target, "wb") as f:
+            shutil.copyfileobj(file.file, f)
+        os.replace(tmp_target, target_path)
+    except Exception:
+        tmp_target.unlink(missing_ok=True)
+        raise
 
     try:
         try:
