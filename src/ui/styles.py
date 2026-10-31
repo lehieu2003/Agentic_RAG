@@ -261,3 +261,4 @@ div[data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarAssistant"
 }
 </style>
 """
+
