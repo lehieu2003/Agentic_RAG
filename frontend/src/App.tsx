@@ -16,6 +16,8 @@ import {
   listSessions,
   getSession,
   deleteSession,
+  deleteAllSessions,
+  deleteSessionsBatch,
 } from './api/client';
 import Header from './components/layout/Header';
 import Sidebar from './components/layout/Sidebar';
@@ -312,6 +314,36 @@ export default function App() {
     }
   };
 
+  const handleDeleteAllSessions = async () => {
+    setSidebarError(null);
+    try {
+      await deleteAllSessions();
+      handleNewChat();
+      setSessions([]);
+    } catch (err: any) {
+      console.error('Failed to delete all sessions:', err);
+      const msg = err.response?.data?.detail || err.message || 'Không thể xóa tất cả cuộc trò chuyện.';
+      setSidebarError(`Lỗi xóa tất cả cuộc trò chuyện: ${msg}`);
+    }
+  };
+
+  const handleDeleteSessions = async (sessionIds: string[]) => {
+    if (!sessionIds.length) return;
+    setSidebarError(null);
+    try {
+      await deleteSessionsBatch(sessionIds);
+      if (currentSessionId && sessionIds.includes(currentSessionId)) {
+        handleNewChat();
+      }
+      const updatedSessions = await listSessions();
+      setSessions(updatedSessions);
+    } catch (err: any) {
+      console.error('Failed to batch delete sessions:', err);
+      const msg = err.response?.data?.detail || err.message || 'Không thể xóa các cuộc trò chuyện đã chọn.';
+      setSidebarError(`Lỗi xóa cuộc trò chuyện đã chọn: ${msg}`);
+    }
+  };
+
   return (
     <div className="min-h-screen h-screen w-screen bg-canvas text-zinc-200 flex flex-col font-sans selection:bg-sky-500/30 selection:text-white overflow-hidden">
       {/* App Header */}
@@ -339,6 +371,8 @@ export default function App() {
           activeSessionId={currentSessionId}
           onSelectSession={handleSelectSession}
           onDeleteSession={handleDeleteSession}
+          onDeleteAllSessions={handleDeleteAllSessions}
+          onDeleteSessions={handleDeleteSessions}
           isUploading={isUploading}
           errorMessage={sidebarError}
           onDismissError={() => setSidebarError(null)}

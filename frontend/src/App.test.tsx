@@ -430,4 +430,42 @@ describe('App Split-Screen Workspace Integration', () => {
       expect(localStorage.getItem('doc_qa_active_session_id')).toBeNull();
     });
   });
+
+  it('deleting all sessions resets chat and clears localStorage', async () => {
+    localStorage.setItem('doc_qa_active_session_id', 's1');
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Tính Reynolds của đường ống')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByLabelText(/toggle sidebar/i));
+    const deleteAllBtn = screen.getByLabelText(/xóa tất cả cuộc trò chuyện/i);
+    fireEvent.click(deleteAllBtn);
+
+    await waitFor(() => {
+      expect(screen.queryByText('Tính Reynolds của đường ống')).not.toBeInTheDocument();
+      expect(localStorage.getItem('doc_qa_active_session_id')).toBeNull();
+    });
+  });
+
+  it('batch deleting active session resets chat and clears localStorage', async () => {
+    localStorage.setItem('doc_qa_active_session_id', 's1');
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Tính Reynolds của đường ống')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByLabelText(/toggle sidebar/i));
+    fireEvent.click(screen.getByLabelText(/chọn cuộc trò chuyện để xóa/i));
+
+    fireEvent.click(screen.getByLabelText(/chọn Tính Reynolds/i));
+    fireEvent.click(screen.getByRole('button', { name: /xóa đã chọn \(1\)/i }));
+
+    await waitFor(() => {
+      expect(screen.queryByText('Tính Reynolds của đường ống')).not.toBeInTheDocument();
+      expect(localStorage.getItem('doc_qa_active_session_id')).toBeNull();
+    });
+  });
 });

@@ -166,6 +166,35 @@ class SessionStore:
             cursor = conn.execute("DELETE FROM sessions WHERE id = ?;", (session_id,))
             return cursor.rowcount > 0
 
+    def delete_all_sessions(self) -> int:
+        """Delete all sessions and their cascading messages.
+
+        Returns:
+            Number of deleted sessions.
+        """
+        with self._get_connection() as conn:
+            cursor = conn.execute("DELETE FROM sessions;")
+            return cursor.rowcount
+
+    def delete_sessions(self, session_ids: List[str]) -> int:
+        """Delete multiple sessions by IDs and their cascading messages.
+
+        Args:
+            session_ids: List of session IDs to delete.
+
+        Returns:
+            Number of deleted sessions.
+        """
+        if not session_ids:
+            return 0
+        with self._get_connection() as conn:
+            placeholders = ",".join(["?"] * len(session_ids))
+            cursor = conn.execute(
+                f"DELETE FROM sessions WHERE id IN ({placeholders});",
+                tuple(session_ids),
+            )
+            return cursor.rowcount
+
     def add_message(
         self,
         session_id: str,

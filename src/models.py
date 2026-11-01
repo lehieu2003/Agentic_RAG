@@ -131,3 +131,9 @@ class SessionDetailResponse(BaseModel):
     session: SessionSummary
     messages: List[ChatMessage]
 
+
+class BatchDeleteSessionsRequest(BaseModel):
+    """Request payload to delete multiple chat sessions."""
+
+    session_ids: List[str] = Field(default_factory=list, description="Danh sách ID các phiên cần xoá")
+

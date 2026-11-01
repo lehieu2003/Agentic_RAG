@@ -377,4 +377,117 @@ describe('Sidebar Component', () => {
     expect(screen.getByText('Phiên hỏi gần đây')).toBeInTheDocument();
     expect(screen.getByText(/5m trước/i)).toBeInTheDocument();
   });
+
+  it('allows deleting all sessions with confirmation', () => {
+    const onDeleteAllSessions = vi.fn();
+    const sessions = [
+      { id: 's1', title: 'Session 1', created_at: '', updated_at: '' },
+      { id: 's2', title: 'Session 2', created_at: '', updated_at: '' },
+    ];
+    render(
+      <Sidebar
+        isOpen={true}
+        onClose={vi.fn()}
+        files={[]}
+        topK={8}
+        onTopKChange={vi.fn()}
+        onNewChat={vi.fn()}
+        onFileUpload={vi.fn()}
+        onDeleteFile={vi.fn()}
+        sessions={sessions}
+        onDeleteAllSessions={onDeleteAllSessions}
+      />
+    );
+    const deleteAllBtn = screen.getByLabelText(/xóa tất cả cuộc trò chuyện/i);
+    fireEvent.click(deleteAllBtn);
+    expect(window.confirm).toHaveBeenCalledWith(
+      'Bạn có chắc chắn muốn xóa tất cả cuộc trò chuyện không?'
+    );
+    expect(onDeleteAllSessions).toHaveBeenCalledTimes(1);
+  });
+
+  it('supports selecting and batch deleting chat sessions', () => {
+    const onDeleteSessions = vi.fn();
+    const sessions = [
+      { id: 's1', title: 'Session 1', created_at: '', updated_at: '' },
+      { id: 's2', title: 'Session 2', created_at: '', updated_at: '' },
+      { id: 's3', title: 'Session 3', created_at: '', updated_at: '' },
+    ];
+    render(
+      <Sidebar
+        isOpen={true}
+        onClose={vi.fn()}
+        files={[]}
+        topK={8}
+        onTopKChange={vi.fn()}
+        onNewChat={vi.fn()}
+        onFileUpload={vi.fn()}
+        onDeleteFile={vi.fn()}
+        sessions={sessions}
+        onDeleteSessions={onDeleteSessions}
+      />
+    );
+
+    // Enter select mode
+    const selectModeBtn = screen.getByLabelText(/chọn cuộc trò chuyện để xóa/i);
+    fireEvent.click(selectModeBtn);
+
+    // Verify selection toolbar shows up
+    expect(screen.getByText(/đã chọn 0/i)).toBeInTheDocument();
+
+    // Select s1 and s2 via checkbox
+    const checkboxS1 = screen.getByLabelText(/chọn Session 1/i);
+    fireEvent.click(checkboxS1);
+    expect(screen.getByText(/đã chọn 1/i)).toBeInTheDocument();
+
+    const checkboxS2 = screen.getByLabelText(/chọn Session 2/i);
+    fireEvent.click(checkboxS2);
+    expect(screen.getByText(/đã chọn 2/i)).toBeInTheDocument();
+
+    // Click delete selected button
+    const deleteSelectedBtn = screen.getByRole('button', { name: /xóa đã chọn \(2\)/i });
+    fireEvent.click(deleteSelectedBtn);
+
+    expect(window.confirm).toHaveBeenCalledWith(
+      'Bạn có chắc chắn muốn xóa 2 cuộc trò chuyện đã chọn không?'
+    );
+    expect(onDeleteSessions).toHaveBeenCalledWith(['s1', 's2']);
+  });
+
+  it('supports select all and cancel in selection mode', () => {
+    const onDeleteSessions = vi.fn();
+    const sessions = [
+      { id: 's1', title: 'Session 1', created_at: '', updated_at: '' },
+      { id: 's2', title: 'Session 2', created_at: '', updated_at: '' },
+    ];
+    render(
+      <Sidebar
+        isOpen={true}
+        onClose={vi.fn()}
+        files={[]}
+        topK={8}
+        onTopKChange={vi.fn()}
+        onNewChat={vi.fn()}
+        onFileUpload={vi.fn()}
+        onDeleteFile={vi.fn()}
+        sessions={sessions}
+        onDeleteSessions={onDeleteSessions}
+      />
+    );
+
+    // Enter select mode
+    fireEvent.click(screen.getByLabelText(/chọn cuộc trò chuyện để xóa/i));
+
+    // Click "Chọn tất cả"
+    const selectAllCheckbox = screen.getByLabelText(/chọn tất cả/i);
+    fireEvent.click(selectAllCheckbox);
+    expect(screen.getByText(/đã chọn 2/i)).toBeInTheDocument();
+
+    // Click Cancel
+    const cancelBtn = screen.getByRole('button', { name: /hủy chọn/i });
+    fireEvent.click(cancelBtn);
+
+    // Selection toolbar gone
+    expect(screen.queryByText(/đã chọn/i)).not.toBeInTheDocument();
+  });
 });

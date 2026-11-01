@@ -9,6 +9,8 @@ import {
   listSessions,
   getSession,
   deleteSession,
+  deleteAllSessions,
+  deleteSessionsBatch,
 } from './client';
 
 describe('ApiClient Service', () => {
@@ -243,6 +245,38 @@ describe('ApiClient Service', () => {
       expect(globalThis.fetch).toHaveBeenCalledWith(
         `/api/v1/sessions/${encodeURIComponent('s 1/special')}`,
         expect.objectContaining({ method: 'DELETE' })
+      );
+    });
+
+    it('deleteAllSessions sends DELETE to /api/v1/sessions', async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ status: 'success', deleted_count: 5 }),
+      } as Response);
+
+      const res = await deleteAllSessions();
+      expect(res.deleted_count).toBe(5);
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        '/api/v1/sessions',
+        expect.objectContaining({ method: 'DELETE' })
+      );
+    });
+
+    it('deleteSessionsBatch sends POST to /api/v1/sessions/batch-delete', async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ status: 'success', deleted_count: 2 }),
+      } as Response);
+
+      const res = await deleteSessionsBatch(['s1', 's2']);
+      expect(res.deleted_count).toBe(2);
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        '/api/v1/sessions/batch-delete',
+        expect.objectContaining({
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ session_ids: ['s1', 's2'] }),
+        })
       );
     });
 

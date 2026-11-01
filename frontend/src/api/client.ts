@@ -151,6 +151,32 @@ export async function deleteSession(sessionId: string): Promise<void> {
 }
 
 /**
+ * Delete all chat sessions and message histories.
+ */
+export async function deleteAllSessions(): Promise<{ status: string; deleted_count: number; message?: string }> {
+  const res = await fetch(`${API_BASE}/sessions`, {
+    method: 'DELETE',
+  });
+  return handleResponse<{ status: string; deleted_count: number; message?: string }>(res);
+}
+
+/**
+ * Delete multiple chat sessions by their IDs.
+ */
+export async function deleteSessionsBatch(
+  sessionIds: string[]
+): Promise<{ status: string; deleted_count: number; message?: string }> {
+  const res = await fetch(`${API_BASE}/sessions/batch-delete`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ session_ids: sessionIds }),
+  });
+  return handleResponse<{ status: string; deleted_count: number; message?: string }>(res);
+}
+
+/**
  * Build browser streaming URL for a document with page anchor support.
  */
 export function getDocumentStreamUrl(filename: string, page?: number): string {

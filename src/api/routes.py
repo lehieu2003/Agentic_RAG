@@ -14,6 +14,7 @@ from src.config import settings
 from src.ingestion.chunker import chunk_document
 from src.ingestion.document_extractor import extract_pages_from_document
 from src.models import (
+    BatchDeleteSessionsRequest,
     ChatMessage,
     FileSummary,
     QARequest,
@@ -355,6 +356,46 @@ def delete_session(request: Request, session_id: str) -> Dict[str, Any]:
         "status": "success",
         "session_id": session_id,
         "message": f"Đã xoá phiên hội thoại '{session_id}' thành công."
+    }
+
+
+@router.delete(
+    "/sessions",
+    tags=["Hội thoại (Sessions)"],
+    summary="Xoá toàn bộ các phiên hội thoại và tin nhắn"
+)
+def delete_all_sessions(request: Request) -> Dict[str, Any]:
+    """Xoá toàn bộ phiên trò chuyện khỏi cơ sở dữ liệu."""
+    session_store = getattr(request.app.state, "session_store", None)
+    if session_store is None:
+        session_store = SessionStore()
+        request.app.state.session_store = session_store
+
+    deleted_count = session_store.delete_all_sessions()
+    return {
+        "status": "success",
+        "deleted_count": deleted_count,
+        "message": f"Đã xoá toàn bộ {deleted_count} phiên hội thoại thành công."
+    }
+
+
+@router.post(
+    "/sessions/batch-delete",
+    tags=["Hội thoại (Sessions)"],
+    summary="Xoá nhiều phiên hội thoại theo danh sách ID"
+)
+def delete_sessions_batch(request: Request, body: BatchDeleteSessionsRequest) -> Dict[str, Any]:
+    """Xoá danh sách các phiên trò chuyện được chỉ định."""
+    session_store = getattr(request.app.state, "session_store", None)
+    if session_store is None:
+        session_store = SessionStore()
+        request.app.state.session_store = session_store
+
+    deleted_count = session_store.delete_sessions(body.session_ids)
+    return {
+        "status": "success",
+        "deleted_count": deleted_count,
+        "message": f"Đã xoá {deleted_count} phiên hội thoại thành công."
     }
 
 

@@ -103,3 +103,39 @@ def test_delete_session_cascades_messages(store):
 
 def test_delete_non_existent_session(store):
     assert store.delete_session("does-not-exist") is False
+
+
+def test_delete_all_sessions(store):
+    store.create_session(session_id="s1", title="Session 1")
+    store.create_session(session_id="s2", title="Session 2")
+    store.add_message("s1", role="user", content="Hi 1")
+    store.add_message("s2", role="user", content="Hi 2")
+
+    deleted_count = store.delete_all_sessions()
+    assert deleted_count == 2
+    assert len(store.list_sessions()) == 0
+    assert len(store.get_messages("s1")) == 0
+    assert len(store.get_messages("s2")) == 0
+
+
+def test_delete_sessions_batch(store):
+    store.create_session(session_id="s1", title="Session 1")
+    store.create_session(session_id="s2", title="Session 2")
+    store.create_session(session_id="s3", title="Session 3")
+    store.add_message("s1", role="user", content="Hi 1")
+    store.add_message("s2", role="user", content="Hi 2")
+    store.add_message("s3", role="user", content="Hi 3")
+
+    deleted_count = store.delete_sessions(["s1", "s3"])
+    assert deleted_count == 2
+    remaining = store.list_sessions()
+    assert len(remaining) == 1
+    assert remaining[0]["id"] == "s2"
+    assert len(store.get_messages("s1")) == 0
+    assert len(store.get_messages("s3")) == 0
+    assert len(store.get_messages("s2")) == 1
+
+
+def test_delete_sessions_batch_empty_or_not_found(store):
+    assert store.delete_sessions([]) == 0
+    assert store.delete_sessions(["non-existent-id"]) == 0

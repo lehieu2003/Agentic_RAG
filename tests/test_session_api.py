@@ -119,3 +119,37 @@ def test_list_sessions_with_limit_param(client):
     sessions = res_all.json()["sessions"]
     assert len(sessions) == 2
 
+
+def test_delete_all_sessions_api(client):
+    client.post("/api/v1/query", json={"question": "Q1", "session_id": "del-all-1"})
+    client.post("/api/v1/query", json={"question": "Q2", "session_id": "del-all-2"})
+
+    res = client.delete("/api/v1/sessions")
+    assert res.status_code == 200
+    data = res.json()
+    assert data["status"] == "success"
+    assert data["deleted_count"] >= 2
+
+    list_res = client.get("/api/v1/sessions")
+    assert list_res.status_code == 200
+    assert len(list_res.json()["sessions"]) == 0
+
+
+def test_batch_delete_sessions_api(client):
+    client.post("/api/v1/query", json={"question": "Q1", "session_id": "batch-1"})
+    client.post("/api/v1/query", json={"question": "Q2", "session_id": "batch-2"})
+    client.post("/api/v1/query", json={"question": "Q3", "session_id": "batch-3"})
+
+    res = client.post(
+        "/api/v1/sessions/batch-delete",
+        json={"session_ids": ["batch-1", "batch-3"]},
+    )
+    assert res.status_code == 200
+    data = res.json()
+    assert data["status"] == "success"
+    assert data["deleted_count"] == 2
+
+    assert client.get("/api/v1/sessions/batch-1").status_code == 404
+    assert client.get("/api/v1/sessions/batch-3").status_code == 404
+    assert client.get("/api/v1/sessions/batch-2").status_code == 200
+
