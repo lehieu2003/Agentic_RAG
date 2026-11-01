@@ -63,6 +63,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           disabled={isQuerying}
           onChange={(e) => setContent(e.target.value)}
           onKeyDown={handleKeyDown}
+          aria-label="Nhập câu hỏi kỹ thuật"
           placeholder={effectivePlaceholder}
           className="w-full bg-transparent text-white placeholder-obsidian-text-muted text-sm px-4 pt-3.5 pb-10 resize-none outline-none disabled:opacity-50 disabled:cursor-not-allowed max-h-40 min-h-[48px] font-sans"
         />
