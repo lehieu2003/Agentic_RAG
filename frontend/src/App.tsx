@@ -313,7 +313,7 @@ export default function App() {
   };
 
   return (
-    <div className="flex flex-col h-screen w-screen bg-obsidian-bg text-obsidian-text overflow-hidden">
+    <div className="min-h-screen h-screen w-screen bg-canvas text-zinc-200 flex flex-col font-sans selection:bg-sky-500/30 selection:text-white overflow-hidden">
       {/* App Header */}
       <Header
         isViewerOpen={isViewerOpen}
@@ -349,14 +349,14 @@ export default function App() {
           {sidebarError && !isSidebarOpen && (
             <div
               role="alert"
-              className="absolute top-3 left-1/2 -translate-x-1/2 z-20 max-w-md w-11/12 px-3.5 py-2.5 bg-rose-950/95 border border-rose-500/50 rounded-lg text-rose-200 text-xs flex items-center justify-between shadow-xl backdrop-blur-xs"
+              className="absolute top-3 left-1/2 -translate-x-1/2 z-20 max-w-md w-11/12 px-4 py-2.5 bg-rose-950/90 border border-rose-500/40 backdrop-blur-md shadow-2xl rounded-xl text-rose-200 text-xs flex items-center justify-between"
             >
               <span className="truncate pr-2">{sidebarError}</span>
               <button
                 type="button"
                 onClick={() => setSidebarError(null)}
                 aria-label="Dismiss error banner"
-                className="text-rose-400 hover:text-white p-0.5 rounded shrink-0 transition-colors"
+                className="text-rose-400 hover:text-white p-1 rounded-lg hover:bg-white/[0.06] shrink-0 transition-colors"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -380,7 +380,7 @@ export default function App() {
 
           {/* Right Pane: Document Viewer */}
           {isViewerOpen && (
-            <div className="w-full md:w-[40%] flex-1 md:flex-initial h-full shrink-0 min-w-0">
+            <div className="w-full md:w-[40%] flex-1 md:flex-initial h-full shrink-0 min-w-0 border-t md:border-t-0 md:border-l border-white/[0.06]">
               <DocumentViewer
                 activeDocument={activeDocument}
                 onClose={() => setIsViewerOpen(false)}
