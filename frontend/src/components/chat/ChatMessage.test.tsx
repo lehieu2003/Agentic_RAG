@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import ChatMessage from './ChatMessage';
 import type { ChatMessageData } from '../../types';
@@ -90,5 +90,59 @@ describe('ChatMessage Component', () => {
 
     render(<ChatMessage message={message} onCitationClick={onCitationClick} />);
     expect(screen.queryByText(/🔍 Đã hiểu ngữ cảnh:/)).not.toBeInTheDocument();
+  });
+
+  it('renders error state with retry button when isError is true', () => {
+    const onCitationClick = vi.fn();
+    const onRetry = vi.fn();
+    const message: ChatMessageData = {
+      id: '6',
+      role: 'assistant',
+      content: 'Đã xảy ra lỗi khi tạo phản hồi.',
+      isError: true,
+      timestamp: Date.now(),
+    };
+
+    render(
+      <ChatMessage
+        message={message}
+        onCitationClick={onCitationClick}
+        onRetry={onRetry}
+      />
+    );
+
+    const retryBtn = screen.getByRole('button', { name: /Thử lại/i });
+    expect(retryBtn).toBeInTheDocument();
+    fireEvent.click(retryBtn);
+    expect(onRetry).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders code block with copy button and handles copy click', async () => {
+    const writeTextMock = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, {
+      clipboard: {
+        writeText: writeTextMock,
+      },
+    });
+
+    const onCitationClick = vi.fn();
+    const message: ChatMessageData = {
+      id: '7',
+      role: 'assistant',
+      content: '```python\nprint("Hello World")\n```',
+      timestamp: Date.now(),
+    };
+
+    render(<ChatMessage message={message} onCitationClick={onCitationClick} />);
+    expect(screen.getByText('python')).toBeInTheDocument();
+    expect(screen.getByText(/print\("Hello World"\)/)).toBeInTheDocument();
+
+    const copyBtn = screen.getByRole('button', { name: /Sao chép mã/i });
+    expect(copyBtn).toBeInTheDocument();
+    fireEvent.click(copyBtn);
+
+    await waitFor(() => {
+      expect(writeTextMock).toHaveBeenCalled();
+    });
   });
 });

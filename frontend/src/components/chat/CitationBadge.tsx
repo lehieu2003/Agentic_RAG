@@ -26,17 +26,17 @@ export const CitationBadge: React.FC<CitationBadgeProps> = ({
       type="button"
       onClick={handleClick}
       title={`${filename}${page !== undefined ? ` (Trang ${page})` : ''} - Bấm để mở tài liệu`}
-      className={`group inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium 
-        bg-obsidian-subtle/80 hover:bg-obsidian-subtle text-obsidian-text hover:text-white 
-        border border-obsidian-border hover:border-obsidian-accent-blue/60 transition-all 
-        shadow-sm hover:shadow-[0_0_12px_rgba(88,166,255,0.15)] cursor-pointer text-left ${className}`}
+      className={`group inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg 
+        bg-sky-500/10 hover:bg-sky-500/20 border border-sky-500/25 hover:border-sky-400/50 
+        text-sky-400 text-xs font-mono transition-all duration-150 cursor-pointer 
+        shadow-sm hover:shadow-[0_0_12px_rgba(56,189,248,0.2)] text-left ${className}`}
     >
-      <FileText className="w-3.5 h-3.5 text-obsidian-accent-blue shrink-0 group-hover:scale-110 transition-transform" />
-      <span className="truncate max-w-[180px] sm:max-w-[240px] font-mono text-[11.5px]">
+      <FileText className="w-3.5 h-3.5 text-sky-400 shrink-0 group-hover:scale-110 transition-transform" />
+      <span className="truncate max-w-[180px] sm:max-w-[240px] font-mono text-[11.5px] text-zinc-200 group-hover:text-white transition-colors">
         {filename}
       </span>
       {page !== undefined && (
-        <span className="inline-flex items-center px-1.5 py-0.2 rounded text-[10.5px] font-semibold bg-obsidian-surface text-obsidian-accent-blue border border-obsidian-border/70 shrink-0">
+        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-sky-500/15 text-sky-300 border border-sky-500/30 shrink-0">
           Trang {page}
         </span>
       )}
