@@ -216,3 +216,4 @@ class QAResponse(BaseModel):
    - Verify session switching, session listing in Sidebar, and `askQuestion` sending `session_id`.
 5. **Regression Assurance:**
    - Verify all 112 pytest backend tests and 71 frontend tests continue to pass 100%.
+
