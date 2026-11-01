@@ -6,6 +6,9 @@ import {
   deleteDocument,
   askQuestion,
   getDocumentStreamUrl,
+  listSessions,
+  getSession,
+  deleteSession,
 } from './client';
 
 describe('ApiClient Service', () => {
@@ -178,5 +181,111 @@ describe('ApiClient Service', () => {
     } as Response);
 
     await expect(uploadDocument(new File([], 'bad.pdf'))).rejects.toThrow('Corrupted or unreadable document');
+  });
+
+  describe('Session API Client', () => {
+    it('listSessions fetches session summaries', async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          sessions: [{ id: 's1', title: 'Máy bơm', created_at: '2026-11-01T00:00:00Z', updated_at: '2026-11-01T00:00:00Z' }],
+        }),
+      } as Response);
+
+      const res = await listSessions();
+      expect(res).toHaveLength(1);
+      expect(res[0].id).toBe('s1');
+      expect(res[0].title).toBe('Máy bơm');
+      expect(globalThis.fetch).toHaveBeenCalledWith('/api/v1/sessions');
+    });
+
+    it('listSessions handles direct array response', async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => [
+          { id: 's2', title: 'Session 2', created_at: '', updated_at: '' }
+        ],
+      } as Response);
+
+      const res = await listSessions();
+      expect(res).toHaveLength(1);
+      expect(res[0].id).toBe('s2');
+    });
+
+    it('getSession fetches session detail with encoded session ID', async () => {
+      const mockDetail = {
+        session: { id: 's 1/special', title: 'Test Session', created_at: '', updated_at: '' },
+        messages: [
+          { role: 'user', content: 'Xin chào', created_at: '' },
+          { role: 'assistant', content: 'Chào bạn', created_at: '' }
+        ],
+      };
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => mockDetail,
+      } as Response);
+
+      const res = await getSession('s 1/special');
+      expect(res.session.id).toBe('s 1/special');
+      expect(res.messages).toHaveLength(2);
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        `/api/v1/sessions/${encodeURIComponent('s 1/special')}`
+      );
+    });
+
+    it('deleteSession sends DELETE to /api/v1/sessions/{id}', async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ status: 'success' }),
+      } as Response);
+
+      await deleteSession('s 1/special');
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        `/api/v1/sessions/${encodeURIComponent('s 1/special')}`,
+        expect.objectContaining({ method: 'DELETE' })
+      );
+    });
+
+    it('askQuestion passes session_id when provided', async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          answer: 'Câu trả lời tiếp nối',
+          citations: [],
+          session_id: 'sess-123',
+          standalone_question: 'Câu hỏi độc lập',
+        }),
+      } as Response);
+
+      const res = await askQuestion('Câu hỏi 2', 5, 'sess-123');
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        '/api/v1/query',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ question: 'Câu hỏi 2', top_k: 5, session_id: 'sess-123' }),
+        })
+      );
+      expect(res.session_id).toBe('sess-123');
+      expect(res.standalone_question).toBe('Câu hỏi độc lập');
+    });
+
+    it('askQuestion omits session_id when null or undefined', async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          answer: 'Câu trả lời mới',
+          citations: [],
+        }),
+      } as Response);
+
+      await askQuestion('Câu hỏi mới', 8, null);
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        '/api/v1/query',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ question: 'Câu hỏi mới', top_k: 8 }),
+        })
+      );
+    });
   });
 });

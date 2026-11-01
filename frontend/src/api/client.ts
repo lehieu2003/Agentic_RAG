@@ -9,6 +9,9 @@ import type {
   FileUploadResponse,
   QAResponse,
   Citation,
+  SessionSummary,
+  SessionListResponse,
+  SessionDetailResponse,
 } from '../types';
 
 const API_BASE = '/api/v1';
@@ -90,14 +93,19 @@ export async function deleteDocument(
  */
 export async function askQuestion(
   question: string,
-  topK: number = 8
+  topK: number = 8,
+  sessionId?: string | null
 ): Promise<QAResponse> {
   const res = await fetch(`${API_BASE}/query`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ question, top_k: topK }),
+    body: JSON.stringify({
+      question,
+      top_k: topK,
+      session_id: sessionId || undefined,
+    }),
   });
 
   const data = await handleResponse<QAResponse>(res);
@@ -113,6 +121,33 @@ export async function askQuestion(
     ...data,
     citations,
   };
+}
+
+/**
+ * List all chat sessions ordered by last active.
+ */
+export async function listSessions(): Promise<SessionSummary[]> {
+  const res = await fetch(`${API_BASE}/sessions`);
+  const data = await handleResponse<SessionSummary[] | SessionListResponse>(res);
+  return Array.isArray(data) ? data : (data.sessions || []);
+}
+
+/**
+ * Retrieve session details and history messages.
+ */
+export async function getSession(sessionId: string): Promise<SessionDetailResponse> {
+  const res = await fetch(`${API_BASE}/sessions/${encodeURIComponent(sessionId)}`);
+  return handleResponse<SessionDetailResponse>(res);
+}
+
+/**
+ * Delete a session and its associated message history.
+ */
+export async function deleteSession(sessionId: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/sessions/${encodeURIComponent(sessionId)}`, {
+    method: 'DELETE',
+  });
+  await handleResponse<{ status: string; [key: string]: any }>(res);
 }
 
 /**

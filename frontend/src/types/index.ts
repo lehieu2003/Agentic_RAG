@@ -76,6 +76,8 @@ export interface QAResponse {
   reasoning_steps?: ReasoningStep[] | string[];
   abstained?: boolean;
   rewritten_queries?: string[];
+  standalone_question?: string;
+  session_id?: string;
 }
 
 export interface ChatMessageData {
@@ -87,4 +89,29 @@ export interface ChatMessageData {
   reasoning_steps?: ReasoningStep[];
   timestamp?: number;
   isError?: boolean;
+  standalone_question?: string;
+}
+
+export interface SessionSummary {
+  id: string;
+  title: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SessionListResponse {
+  sessions: SessionSummary[];
+}
+
+export interface SessionDetailResponse {
+  session: SessionSummary;
+  messages: Array<{
+    role: 'user' | 'assistant';
+    content: string;
+    citations?: Citation[];
+    reasoning_steps?: any[];
+    created_at?: string;
+    standalone_question?: string;
+    id?: string;
+  }>;
 }
