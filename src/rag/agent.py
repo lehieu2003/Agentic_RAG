@@ -179,13 +179,28 @@ class AgenticRAG:
         variations: List[str] = [clean_q]
         seen = {clean_q.lower()}
 
+        # 1. Calculation & formula query abstraction (strip concrete user numbers)
+        is_calc_query = any(w in clean_q.lower() for w in [
+            "tính", "tinh", "reynolds", "npsh", "cột áp", "cot ap",
+            "vận tốc", "van toc", "lưu lượng", "luu luong", "hiệu suất",
+            "hieu suat", "công suất", "cong suat", "sai số", "sai so", "dung sai"
+        ])
+        if is_calc_query:
+            stripped = re.sub(r"\b\d+([.,]\d+)?(\s*[a-zA-Z%⁻¹²³/−]+)?\b", "", clean_q)
+            stripped = re.sub(r"\s+", " ", stripped).strip(" :,-=")
+            if stripped:
+                calc_variation = f"công thức {stripped}".strip()
+                if calc_variation.lower() not in seen:
+                    seen.add(calc_variation.lower())
+                    variations.append(calc_variation)
+
         if self.llm_client is not None:
             prompt = (
                 f"Cho câu hỏi tra cứu kỹ thuật: '{clean_q}'.\n"
                 f"Hãy tạo ra 3 biến thể tìm kiếm ngắn gọn:\n"
                 f"1. Thuật ngữ tiếng Anh chuyên ngành hoặc tên tiêu chuẩn quốc tế (ISO/IEC) tương đương.\n"
                 f"2. Cụm từ mở rộng kèm lĩnh vực kỹ thuật/đo lường cụ thể.\n"
-                f"3. Từ khóa hoặc từ đồng nghĩa ngắn gọn.\n"
+                f"3. Từ khóa hoặc tên công thức/nguyên lý tổng quát (nếu câu hỏi có số liệu tính toán, hãy bỏ các con số cụ thể để tìm trúng trang chứa công thức trong tiêu chuẩn).\n"
                 f"Mỗi biến thể trên một dòng mới. Không thêm số thứ tự, gạch đầu dòng, hay giải thích."
             )
             raw_text = self._call_llm(prompt)
@@ -463,8 +478,10 @@ class AgenticRAG:
                 f"Câu hỏi của người dùng: '{clean_q}'\n\n"
                 f"Các đoạn trích dẫn tài liệu tìm được:\n{context_text}\n\n"
                 f"Nhiệm vụ: Hãy phân tích xem các đoạn trích trên có chứa thông tin hoặc căn cứ thực tế để trả lời cho câu hỏi hay không "
-                f"(bao gồm định nghĩa cốt lõi, khái niệm, phạm vi áp dụng, nguyên lý, thông số hoặc hướng dẫn trong tài liệu, "
-                f"kể cả khi các đoạn trích quét từ tài liệu OCR bị thiếu dấu tiếng Việt). "
+                f"(bao gồm định nghĩa cốt lõi, khái niệm, phạm vi áp dụng, nguyên lý, thông số, công thức hoặc hướng dẫn trong tài liệu, "
+                f"kể cả khi các đoạn trích quét từ tài liệu OCR bị thiếu dấu tiếng Việt. "
+                f"Đối với câu hỏi tính toán: chỉ cần đoạn trích chứa công thức, định nghĩa hoặc mối quan hệ giữa các đại lượng là đủ căn cứ để tính toán (is_sufficient: true), "
+                f"không yêu cầu tài liệu phải có sẵn con số kết quả cụ thể). "
                 f"Nếu có căn cứ để trả lời câu hỏi, hãy đánh giá is_sufficient: true. "
                 f"Chỉ trả về is_sufficient: false khi các đoạn trích hoàn toàn không chứa thông tin hoặc lệch chủ đề so với câu hỏi.\n"
                 f"Trả về kết quả dưới dạng JSON duy nhất với cấu trúc:\n"

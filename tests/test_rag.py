@@ -99,3 +99,19 @@ def test_citation_unicode_normalization_and_flexible_matching():
     resp3 = gen.parse_llm_output(raw_no_ext, retrieved_chunks=[chunk])
     assert resp3.abstained is False
     assert len(resp3.citations) == 1
+
+
+def test_calculation_prompt_guidance():
+    chunk = RetrievalResult(
+        chunk=DocumentChunk(
+            chunk_id="c1",
+            doc_name="pump.pdf",
+            page_number=8,
+            text="Hệ số Reynolds Re = (U * D) / nu. Trong đó U là vận tốc, D là đường kính, nu là độ nhớt."
+        ),
+        score=0.92
+    )
+    prompt = build_rag_prompt("Tính Reynolds khi D = 0.2 m, U = 2 m/s", [chunk])
+    assert "HƯỚNG DẪN TÍNH TOÁN KỸ THUẬT" in prompt
+    assert "pi*D^2/4" in prompt or "Thế số và tính toán" in prompt
+    assert "[Tài liệu: pump.pdf | Trang: 8]" in prompt
