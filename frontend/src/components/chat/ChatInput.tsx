@@ -55,7 +55,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
   return (
     <div className={`w-full max-w-4xl mx-auto px-4 ${className}`}>
-      <div className="relative rounded-2xl bg-obsidian-surface border border-obsidian-border focus-within:border-obsidian-accent-blue/60 shadow-lg transition-all duration-200">
+      <div className="relative rounded-2xl bg-zinc-900/85 backdrop-blur-xl border border-white/[0.1] focus-within:border-sky-500/60 shadow-[0_8px_32px_rgba(0,0,0,0.5)] transition-all duration-200">
         <textarea
           ref={textareaRef}
           rows={1}
@@ -65,14 +65,14 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           onKeyDown={handleKeyDown}
           aria-label="Nhập câu hỏi kỹ thuật"
           placeholder={effectivePlaceholder}
-          className="w-full bg-transparent text-white placeholder-obsidian-text-muted text-sm px-4 pt-3.5 pb-10 resize-none outline-none disabled:opacity-50 disabled:cursor-not-allowed max-h-40 min-h-[48px] font-sans"
+          className="w-full bg-transparent text-white placeholder-zinc-500 text-sm px-4 pt-3.5 pb-10 resize-none outline-none disabled:opacity-50 disabled:cursor-not-allowed max-h-40 min-h-[48px] font-sans"
         />
 
         {/* Action bar inside textarea */}
         <div className="absolute left-3 right-3 bottom-2.5 flex items-center justify-between pointer-events-none">
-          <div className="flex items-center gap-2 text-[11px] text-obsidian-text-muted font-mono pointer-events-auto">
-            <span className="hidden sm:inline-flex items-center gap-1">
-              <Sparkles className="w-3 h-3 text-obsidian-accent-blue" />
+          <div className="flex items-center gap-2 text-[11px] font-mono text-zinc-500 pointer-events-auto">
+            <span className="hidden sm:inline-flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5 text-sky-400" />
               <span>Hỗ trợ KaTeX &amp; TCVN</span>
             </span>
           </div>
@@ -82,7 +82,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             onClick={handleSend}
             disabled={isQuerying || content.trim().length === 0}
             aria-label="Gửi tin nhắn"
-            className="pointer-events-auto p-2 rounded-xl bg-obsidian-accent hover:bg-emerald-600 disabled:bg-obsidian-subtle text-white disabled:text-obsidian-text-muted disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-150 flex items-center justify-center cursor-pointer shadow-sm hover:shadow-[0_0_12px_rgba(35,134,54,0.3)]"
+            className="pointer-events-auto p-2 rounded-xl bg-sky-500 hover:bg-sky-400 disabled:bg-zinc-800 text-zinc-950 disabled:text-zinc-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-150 flex items-center justify-center cursor-pointer shadow-sm hover:shadow-[0_0_16px_rgba(56,189,248,0.4)]"
           >
             {isQuerying ? (
               <Loader2 className="w-4 h-4 animate-spin" />
@@ -92,8 +92,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           </button>
         </div>
       </div>
-      <div className="mt-2 text-center text-[11px] text-obsidian-text-muted">
-        Nhấn <kbd className="px-1 py-0.5 rounded bg-obsidian-subtle border border-obsidian-border text-[10px] font-mono">Enter</kbd> để gửi, <kbd className="px-1 py-0.5 rounded bg-obsidian-subtle border border-obsidian-border text-[10px] font-mono">Shift + Enter</kbd> để xuống dòng
+      <div className="mt-2 text-center text-[11px] text-zinc-500">
+        Nhấn <kbd className="px-1.5 py-0.5 rounded bg-zinc-800/80 border border-white/[0.08] text-[10px] font-mono text-zinc-400">Enter</kbd> để gửi, <kbd className="px-1.5 py-0.5 rounded bg-zinc-800/80 border border-white/[0.08] text-[10px] font-mono text-zinc-400">Shift + Enter</kbd> để xuống dòng
       </div>
     </div>
   );
