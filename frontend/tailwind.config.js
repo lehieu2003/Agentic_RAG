@@ -6,7 +6,28 @@ export default {
   ],
   theme: {
     extend: {
+      fontFamily: {
+        sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
+        mono: ['JetBrains Mono', 'ui-monospace', 'monospace'],
+      },
       colors: {
+        canvas: '#09090b',
+        surface: {
+          DEFAULT: '#121215',
+          elevated: '#18181b',
+          subtle: '#222227',
+        },
+        'surface-elevated': '#18181b',
+        'surface-subtle': '#222227',
+        brand: {
+          DEFAULT: '#38bdf8',
+          sky: '#38bdf8',
+          emerald: '#10b981',
+          violet: '#a855f7',
+        },
+        'brand-sky': '#38bdf8',
+        'brand-emerald': '#10b981',
+        'brand-violet': '#a855f7',
         obsidian: {
           DEFAULT: '#0d1117',
           bg: '#0d1117',
