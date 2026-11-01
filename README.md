@@ -19,10 +19,13 @@ Hệ thống tuân thủ kiến trúc Clean / Hexagonal Modular Monorepo kết h
                                      v
                       +-----------------------------+
                       |       FastAPI Gateway       |
-                      | - POST /api/v1/upload       |
-                      | - GET  /api/v1/files        |
-                      | - GET  /api/v1/files/{name} |
-                      | - POST /api/v1/query        |
+                      | - POST   /api/v1/upload     |
+                      | - GET    /api/v1/files      |
+                      | - GET    /api/v1/files/{n}  |
+                      | - POST   /api/v1/query      |
+                      | - GET    /api/v1/sessions   |
+                      | - GET    /api/v1/sessions/id|
+                      | - DELETE /api/v1/sessions/id|
                       +-------+--------------+------+
                               |              |
       +-----------------------+              +-----------------------+
@@ -105,42 +108,48 @@ Hệ thống tuân thủ kiến trúc Clean / Hexagonal Modular Monorepo kết h
    - **Citation Grounding**: Cơ chế hậu kiểm nghiêm ngặt, đối chiếu từng trích dẫn trong câu trả lời với tập chunk tài liệu thực tế thu thập được, loại bỏ hoàn toàn các trích dẫn bịa đặt (hallucinated citations).
    - **Abstention dứt khoát**: Từ chối trả lời nếu sau các lần tái truy xuất vẫn không tìm thấy bằng chứng thỏa mãn độ tin cậy (`"Tôi không tìm thấy thông tin này trong tài liệu được cung cấp."`).
 
-2. **Persistent Raw File Storage & Filename Deduplication**:
+2. **Multi-turn Conversational Memory & Dynamic Session Management**:
+   - **History-aware Contextualizer**: Node `rephrase_question` phân tích ngữ cảnh lịch sử hội thoại gần nhất và viết lại các câu hỏi kế tiếp mơ hồ (ví dụ: *"Áp suất của nó là bao nhiêu?"* -> *"Áp suất làm việc tối đa của máy bơm công nghiệp ly tâm là bao nhiêu?"*) để truy xuất chính xác tài liệu liên quan mà vẫn bảo toàn câu hỏi nguyên bản của người dùng trên giao diện.
+   - **Persistent SQLite Session Store**: Lưu trữ phiên và tin nhắn bền vững tại `data/chat_history.db` (hỗ trợ foreign key cascade deletion khi xóa phiên), tích hợp cơ chế sliding window context giới hạn số lượt hội thoại gần nhất nạp vào prompt nhằm tối ưu hóa chi phí token.
+   - **Automatic Session Title Generation**: Tự động tạo tiêu đề ngắn gọn từ câu hỏi đầu tiên của người dùng khi khởi tạo phiên mới.
+   - **Đồng bộ hóa trên cả 2 giao diện**: React SPA quản lý danh sách cuộc trò chuyện gần đây ở Sidebar (chọn, chuyển đổi, xóa phiên); Streamlit companion tự động lưu và gửi `session_id` qua `st.session_state`.
+
+3. **Persistent Raw File Storage & Filename Deduplication**:
    - Lưu trữ an toàn các tệp tài liệu nguyên bản vào thư mục `data/uploads/`.
    - **Filename Deduplication**: Kiểm tra tệp đã tồn tại trước khi xử lý. Nếu tệp đã có trong hệ thống, backend phản hồi trạng thái `already_exists` và bỏ qua (skip) toàn bộ chu trình phân trang, chunking và embedding vào Qdrant, giúp tiết kiệm tối đa tài nguyên tính toán và ngăn ngừa nhiễu vector.
 
-3. **Interactive In-Browser Citations & Safe File Serving**:
+4. **Interactive In-Browser Citations & Safe File Serving**:
    - Endpoint an toàn `GET /api/v1/files/{filename}` phục vụ tệp trực tiếp trong trình duyệt (`inline` viewing) với cơ chế bảo mật ngăn chặn tấn công Path Traversal (`is_relative_to`).
    - Hỗ trợ fragment nhảy trang chính xác (`#page={page}`): Người dùng bấm vào badge trích dẫn hoặc bằng chứng truy xuất sẽ mở tài liệu trong tab mới và tự động cuộn đến đúng trang chứa thông tin (hỗ trợ native trên PDF viewer của Chrome, Edge, Safari, Firefox).
 
-4. **Multi-format Document Processing & OCR Fallback**:
+5. **Multi-format Document Processing & OCR Fallback**:
    - Hỗ trợ đa dạng định dạng tài liệu kỹ thuật: **PDF** (`.pdf`), **Word** (`.docx`), **Text** (`.txt`), và **Ảnh** (`.png`, `.jpg`, `.jpeg`).
    - **PDF (PyMuPDF + RapidOCR)**: Tự động trích xuất trang văn bản số (digital text). Nếu mật độ văn bản thấp (< 50 ký tự, như tài liệu scan, bản vẽ, sơ đồ), tự động render ảnh 300 DPI và kích hoạt **RapidOCR** để nhận diện ký tự quang học.
    - **Word (DOCX)**: Trích xuất đoạn văn bản cấu trúc qua `python-docx` kết hợp phân trang logic (~2.000 ký tự/trang, `logical_page_size = 2000`).
    - **Text (TXT)**: Đọc văn bản thuần hỗ trợ fallback bảng mã (UTF-8, Latin-1) kèm phân trang logic (~2.000 ký tự/trang, `logical_page_size = 2000`).
    - **Ảnh kỹ thuật (PNG, JPG, JPEG)**: Nhận diện nội dung chữ trực tiếp từ ảnh qua RapidOCR engine (gán trang mặc định là 1).
 
-5. **Multi-file Batch Upload & Trực quan hóa tiến độ**:
+6. **Multi-file Batch Upload & Trực quan hóa tiến độ**:
    - Tải lên đồng thời nhiều tệp tài liệu trong một lượt thao tác. Giao diện Streamlit điều phối upload tuần tự từng file kèm cơ chế xử lý lỗi độc lập.
    - Theo dõi trạng thái trực tiếp theo thời gian thực qua container `st.status` và các thẻ thống kê `st.metric` (tổng số tệp, thành công, đã tồn tại / trùng lặp, thất bại, và tổng số chunk đã nạp vào vector database).
 
-6. **Chunking bảo toàn số trang & metadata**:
+7. **Chunking bảo toàn số trang & metadata**:
    - Phân chia văn bản thành các đoạn (chunks) có overlap.
    - Giữ nguyên `doc_name` và `page_number` (1-indexed) ở từng chunk bất kể tài liệu là PDF, DOCX, TXT hay Ảnh.
 
-7. **Vector Database (Qdrant Cloud & Local)**:
+8. **Vector Database (Qdrant Cloud & Local)**:
    - Sử dụng model `sentence-transformers/all-MiniLM-L6-v2` tạo vector 384 chiều chuẩn hóa.
    - Hỗ trợ kết nối Qdrant Cloud Cluster (`QDRANT_URL`, `QDRANT_API_KEY`) hoặc lưu trữ cục bộ.
 
-8. **Evaluation Suite (Recall@K Benchmark)**:
+9. **Evaluation Suite (Recall@K Benchmark)**:
    - Bộ dữ liệu Ground Truth kiểm thử 15 câu hỏi kỹ thuật và out-of-scope.
    - Đo lường tự động: `Recall@1`, `Recall@3`, `Recall@5`, `Recall@10` và `Abstention Accuracy`.
 
-9. **gRPC Retrieval Service**:
+10. **gRPC Retrieval Service**:
    - Định nghĩa API hợp đồng bằng Protocol Buffers (`proto/retrieval.proto`).
    - Cung cấp `start_grpc_server` và `GrpcRetriever` adapter. Chuyển đổi giữa chạy local và gRPC chỉ bằng 1 biến môi trường `RETRIEVAL_MODE=grpc`.
 
-10. **Giao diện Web Hiện Đại (React SPA Obsidian UI & Streamlit Companion)**:
+11. **Giao diện Web Hiện Đại (React SPA Obsidian UI & Streamlit Companion)**:
     - **React Single-Page Application (Primary UI)**:
       - Thiết kế Dark Mode tối giản (Obsidian theme), font chữ kỹ thuật sắc nét, giảm mỏi mắt khi đọc tài liệu dài.
       - **Split-view Document Viewer**: Xem tài liệu PDF/văn bản trực tiếp bên cạnh khung chat; nhấp vào badge trích dẫn sẽ tự động mở panel tài liệu và cuộn đến đúng trang (`#page={page}`).
@@ -282,9 +291,13 @@ http://localhost:8000/api/v1/files/may_bom_cong_nghiep.pdf#page=3
 ```
 Endpoint bảo vệ an toàn tuyệt đối chống tấn công Path Traversal: các yêu cầu chứa đường dẫn bất thường (ví dụ: `../etc/passwd`) sẽ bị từ chối với mã lỗi `400 Bad Request`.
 
-#### 7.4. Đặt câu hỏi Q&A (Kích hoạt Agentic RAG)
-Gửi câu hỏi tới hệ thống để thực thi quy trình Agentic RAG (Query Expansion -> Corrective Retrieval -> Reflection -> Grounding):
+#### 7.4. Đặt câu hỏi Q&A (Kích hoạt Agentic RAG & Ngữ cảnh Đa lượt)
+Gửi câu hỏi tới hệ thống để thực thi quy trình Agentic RAG (Contextualizer -> Query Expansion -> Corrective Retrieval -> Reflection -> Grounding):
+- Truyền `session_id` để duy trì mạch hội thoại đa lượt (multi-turn context). Nếu `session_id` là `null` hoặc không truyền, hệ thống sẽ tự động tạo một phiên trò chuyện mới và trả về `session_id` trong phản hồi.
+- Khi có ngữ cảnh trước đó, hệ thống tự động viết lại câu hỏi kế tiếp mơ hồ thành câu hỏi độc lập (`standalone_question`) để truy vấn tài liệu chính xác nhất.
+
 ```bash
+# Lượt hỏi 1: Khởi tạo phiên mới (hoặc truyền session_id cụ thể)
 curl -X POST "http://localhost:8000/api/v1/query" \
   -H "Content-Type: application/json" \
   -d '{
@@ -298,18 +311,123 @@ Phản hồi mẫu:
   "answer": "Theo tài liệu kỹ thuật, áp suất đầu ra của máy bơm giảm do các nguyên nhân sau: cánh bơm bị mòn, rò rỉ tại vòng đệm và đường ống hút bị tắc nghẽn [Tài liệu: may_bom_cong_nghiep.pdf, Trang 3].",
   "citations": [
     {
-      "document": "may_bom_cong_nghiep.pdf",
-      "page": 3
+      "doc_name": "may_bom_cong_nghiep.pdf",
+      "page_number": 3
     }
   ],
-  "evidence": [
+  "abstained": false,
+  "retrieved_chunks": [
     {
-      "doc_name": "may_bom_cong_nghiep.pdf",
-      "page_number": 3,
-      "text": "Sự cố suy giảm áp suất: Nguyên nhân chính bao gồm mài mòn cánh bơm...",
+      "chunk": {
+        "chunk_id": "chunk_123",
+        "doc_name": "may_bom_cong_nghiep.pdf",
+        "page_number": 3,
+        "text": "Sự cố suy giảm áp suất: Nguyên nhân chính bao gồm mài mòn cánh bơm..."
+      },
       "score": 0.89
     }
+  ],
+  "reasoning_steps": [
+    "Khởi tạo phiên hội thoại mới: a1b2c3d4-...",
+    "Mở rộng truy vấn thành 3 góc nhìn kỹ thuật",
+    "Truy xuất và hợp nhất các đoạn bằng chứng liên quan",
+    "Tự phản chiếu: Đạt ngưỡng liên quan 0.89 >= 0.70",
+    "Hậu kiểm trích dẫn và tổng hợp câu trả lời"
+  ],
+  "standalone_question": "Những nguyên nhân nào khiến áp suất đầu ra của máy bơm giảm?",
+  "session_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+}
+```
+
+```bash
+# Lượt hỏi 2 (Follow-up): Tái sử dụng session_id vừa nhận được
+curl -X POST "http://localhost:8000/api/v1/query" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "question": "Cách khắc phục nguyên nhân thứ nhất như thế nào?",
+    "top_k": 5,
+    "session_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+  }'
+```
+
+*(Hệ thống sẽ tự động ngữ cảnh hóa câu hỏi thành: "Cách khắc phục tình trạng cánh bơm bị mòn của máy bơm như thế nào?" và truy xuất trả lời chính xác dựa trên tài liệu).*
+
+#### 7.5. Quản lý phiên hội thoại (Conversational Session API)
+
+##### 7.5.1. Lấy danh sách tất cả các phiên hội thoại
+Lấy danh sách các phiên trò chuyện, sắp xếp theo thời gian cập nhật mới nhất (`updated_at` giảm dần).
+Hỗ trợ tham số truy vấn tùy chọn `limit` (mặc định 50, từ 1 đến 200).
+
+```bash
+curl -X GET "http://localhost:8000/api/v1/sessions?limit=20"
+```
+
+Phản hồi mẫu:
+```json
+{
+  "sessions": [
+    {
+      "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      "title": "Những nguyên nhân khiến áp suất máy bơm giảm",
+      "created_at": "2026-11-01T13:00:00+00:00",
+      "updated_at": "2026-11-01T13:05:00+00:00"
+    }
   ]
+}
+```
+
+##### 7.5.2. Lấy chi tiết phiên hội thoại & lịch sử tin nhắn
+Truy xuất thông tin chi tiết một phiên cùng toàn bộ lịch sử tin nhắn đã gửi giữa người dùng và trợ lý:
+
+```bash
+curl -X GET "http://localhost:8000/api/v1/sessions/a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+```
+
+Phản hồi mẫu:
+```json
+{
+  "session": {
+    "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "title": "Những nguyên nhân khiến áp suất máy bơm giảm",
+    "created_at": "2026-11-01T13:00:00+00:00",
+    "updated_at": "2026-11-01T13:05:00+00:00"
+  },
+  "messages": [
+    {
+      "role": "user",
+      "content": "Những nguyên nhân nào khiến áp suất đầu ra của máy bơm giảm?",
+      "created_at": "2026-11-01T13:00:00+00:00"
+    },
+    {
+      "role": "assistant",
+      "content": "Theo tài liệu kỹ thuật, áp suất đầu ra giảm do...",
+      "citations": [
+        {
+          "doc_name": "may_bom_cong_nghiep.pdf",
+          "page_number": 3
+        }
+      ],
+      "reasoning_steps": [
+        "Mở rộng truy vấn thành 3 góc nhìn kỹ thuật",
+        "Truy xuất và kiểm tra ngưỡng liên quan"
+      ],
+      "created_at": "2026-11-01T13:00:02+00:00"
+    }
+  ]
+}
+```
+
+##### 7.5.3. Xóa phiên hội thoại
+Xóa hoàn toàn phiên hội thoại và tự động xóa toàn bộ tin nhắn liên quan trong cơ sở dữ liệu (`ON DELETE CASCADE`):
+
+```bash
+curl -X DELETE "http://localhost:8000/api/v1/sessions/a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+```
+
+Phản hồi mẫu:
+```json
+{
+  "message": "Đã xóa thành công phiên hội thoại a1b2c3d4-e5f6-7890-abcd-ef1234567890."
 }
 ```
 

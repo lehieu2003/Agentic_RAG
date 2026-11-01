@@ -104,3 +104,18 @@ def test_query_with_explicit_new_session_id(client):
     res_detail = client.get(f"/api/v1/sessions/{custom_id}")
     assert res_detail.status_code == 200
     assert res_detail.json()["session"]["id"] == custom_id
+
+
+def test_list_sessions_with_limit_param(client):
+    # Create multiple sessions
+    for i in range(3):
+        client.post(
+            "/api/v1/query",
+            json={"question": f"Câu hỏi {i}", "top_k": 1, "session_id": f"sess-limit-{i}"},
+        )
+
+    res_all = client.get("/api/v1/sessions?limit=2")
+    assert res_all.status_code == 200
+    sessions = res_all.json()["sessions"]
+    assert len(sessions) == 2
+

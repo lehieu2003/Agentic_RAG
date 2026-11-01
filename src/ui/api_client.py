@@ -97,12 +97,18 @@ class ApiClient:
                 raise RuntimeError(f"API Error ({resp.status_code}): {resp.text}")
             return resp.json()
 
-    def query(self, question: str, top_k: int = 3) -> QAResponse:
+    def query(
+        self,
+        question: str,
+        top_k: int = 3,
+        session_id: Optional[str] = None,
+    ) -> QAResponse:
         """Submit a user question to the Q&A assistant.
 
         Args:
             question: User natural language query.
             top_k: Number of relevant chunks to retrieve.
+            session_id: Optional session identifier for multi-turn conversation context.
 
         Returns:
             Parsed QAResponse model.
@@ -111,8 +117,70 @@ class ApiClient:
             Exception: If request fails or server returns an error.
         """
         with httpx.Client(timeout=self.timeout) as client:
-            payload = {"question": question, "top_k": top_k}
+            payload: Dict[str, Any] = {"question": question, "top_k": top_k}
+            if session_id:
+                payload["session_id"] = session_id
             resp = client.post(f"{self.base_url}/query", json=payload)
             if resp.status_code >= 400:
                 raise RuntimeError(f"API Error ({resp.status_code}): {resp.text}")
             return QAResponse.model_validate(resp.json())
+
+    # Alias query_assistant to query for backward and cross-compatibility
+    query_assistant = query
+
+    def list_sessions(self, limit: int = 50) -> List[Dict[str, Any]]:
+        """List active conversation sessions from backend.
+
+        Args:
+            limit: Maximum number of sessions to return.
+
+        Returns:
+            List of session summary dicts, or empty list if request fails.
+        """
+        try:
+            url = f"{self.base_url}/sessions" if self.base_url.endswith("/api/v1") else f"{self.base_url}/api/v1/sessions"
+            with httpx.Client(timeout=self.timeout) as client:
+                resp = client.get(url, params={"limit": limit})
+                if resp.status_code == 200:
+                    data = resp.json()
+                    if isinstance(data, dict) and "sessions" in data:
+                        return data["sessions"]
+                return []
+        except Exception:
+            return []
+
+    def get_session(self, session_id: str) -> Optional[Dict[str, Any]]:
+        """Fetch detail and message history of a session.
+
+        Args:
+            session_id: Session identifier.
+
+        Returns:
+            Session detail dict or None.
+        """
+        try:
+            url = f"{self.base_url}/sessions/{session_id}" if self.base_url.endswith("/api/v1") else f"{self.base_url}/api/v1/sessions/{session_id}"
+            with httpx.Client(timeout=self.timeout) as client:
+                resp = client.get(url)
+                if resp.status_code == 200:
+                    return resp.json()
+                return None
+        except Exception:
+            return None
+
+    def delete_session(self, session_id: str) -> bool:
+        """Delete a conversation session.
+
+        Args:
+            session_id: Session identifier.
+
+        Returns:
+            True if deleted successfully, False otherwise.
+        """
+        try:
+            url = f"{self.base_url}/sessions/{session_id}" if self.base_url.endswith("/api/v1") else f"{self.base_url}/api/v1/sessions/{session_id}"
+            with httpx.Client(timeout=self.timeout) as client:
+                resp = client.delete(url)
+                return resp.status_code == 200
+        except Exception:
+            return False

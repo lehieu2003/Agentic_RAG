@@ -8,7 +8,7 @@ import shutil
 from typing import Any, Dict, List
 import unicodedata
 import uuid
-from fastapi import APIRouter, File, HTTPException, Request, UploadFile
+from fastapi import APIRouter, File, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse
 from src.config import settings
 from src.ingestion.chunker import chunk_document
@@ -287,14 +287,17 @@ def delete_document(request: Request, filename: str) -> Dict[str, Any]:
     tags=["Hội thoại (Sessions)"],
     summary="Danh sách tất cả các phiên hội thoại"
 )
-def list_sessions(request: Request) -> SessionListResponse:
+def list_sessions(
+    request: Request,
+    limit: int = Query(default=50, ge=1, le=200, description="Số lượng phiên tối đa cần lấy"),
+) -> SessionListResponse:
     """Liệt kê danh sách các phiên trò chuyện, sắp xếp theo thời gian cập nhật mới nhất."""
     session_store = getattr(request.app.state, "session_store", None)
     if session_store is None:
         session_store = SessionStore()
         request.app.state.session_store = session_store
 
-    sessions_raw = session_store.list_sessions(limit=50)
+    sessions_raw = session_store.list_sessions(limit=limit)
     sessions = [
         SessionSummary(
             id=s["id"],

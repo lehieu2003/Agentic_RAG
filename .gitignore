@@ -9,5 +9,8 @@ data/uploads/
 .DS_Store
 .agents/
 .claude/
+*.db
+data/*.db
+
 
 

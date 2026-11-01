@@ -109,7 +109,7 @@ export interface SessionDetailResponse {
     role: 'user' | 'assistant';
     content: string;
     citations?: Citation[];
-    reasoning_steps?: any[];
+    reasoning_steps?: ReasoningStep[] | string[] | any[];
     created_at?: string;
     standalone_question?: string;
     id?: string;

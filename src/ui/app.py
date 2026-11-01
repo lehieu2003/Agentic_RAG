@@ -19,17 +19,20 @@ from src.ui.styles import CHATGPT_CUSTOM_CSS
 
 
 def init_session_state(state: Dict[str, Any]) -> None:
-    """Initialize session state keys for chat history and suggestions."""
+    """Initialize session state keys for chat history, suggestions, and session ID."""
     if "messages" not in state:
         state["messages"] = []
     if "pending_prompt" not in state:
         state["pending_prompt"] = None
+    if "session_id" not in state:
+        state["session_id"] = None
 
 
 def reset_session_state(state: Dict[str, Any]) -> None:
-    """Clear message history and pending prompts."""
+    """Clear message history, pending prompts, and active session ID."""
     state["messages"] = []
     state["pending_prompt"] = None
+    state["session_id"] = None
 
 
 def main() -> None:
@@ -110,7 +113,10 @@ def main() -> None:
             with st.spinner("Đang tìm kiếm tài liệu, đối chiếu tiêu chuẩn và tính toán..."):
                 try:
                     top_k = sidebar_state.get("top_k", 3)
-                    response = api_client.query(prompt, top_k=top_k)
+                    session_id = st.session_state.get("session_id")
+                    response = api_client.query(prompt, top_k=top_k, session_id=session_id)
+                    if response.session_id:
+                        st.session_state["session_id"] = response.session_id
                     render_assistant_message(response, api_base_url=api_base_url)
                     st.session_state["messages"].append({
                         "role": "assistant",
@@ -119,6 +125,7 @@ def main() -> None:
                         "abstained": response.abstained,
                         "retrieved_chunks": [r.model_dump() for r in response.retrieved_chunks],
                         "reasoning_steps": getattr(response, "reasoning_steps", []) or [],
+                        "session_id": response.session_id,
                     })
                 except Exception as exc:
                     err_text = f"❌ Không thể thực hiện truy vấn: {exc}"

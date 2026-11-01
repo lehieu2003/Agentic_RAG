@@ -29,7 +29,7 @@ def render_sidebar(api_client: ApiClient) -> Dict[str, Any]:
         st.title("🤖 Q&A Assistant")
         st.caption("Trợ lý hỏi đáp tài liệu kỹ thuật thông minh")
 
-        reset_chat = st.button("➕ Cuộc trò chuyện mới", use_container_width=True, type="secondary")
+        reset_chat = st.button("➕ Cuộc trò chuyện mới", width="stretch", type="secondary")
 
         st.divider()
 
@@ -108,7 +108,7 @@ def render_sidebar(api_client: ApiClient) -> Dict[str, Any]:
 
         uploaded = False
         if uploaded_files:
-            if st.button("🚀 Nạp vào hệ thống", use_container_width=True, type="primary"):
+            if st.button("🚀 Nạp vào hệ thống", width="stretch", type="primary"):
                 total_files_count = len(uploaded_files)
                 with st.status(f"Đang xử lý {total_files_count} tệp...", expanded=True) as status:
                     success_count = 0
