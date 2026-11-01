@@ -325,4 +325,56 @@ describe('Sidebar Component', () => {
     expect(window.confirm).toHaveBeenCalledWith('Bạn có chắc chắn muốn xóa cuộc trò chuyện này không?');
     expect(onDeleteSession).toHaveBeenCalledWith('s1');
   });
+
+  it('renders segmented control tabs and switches active tab on click', () => {
+    render(
+      <Sidebar
+        isOpen={true}
+        onClose={vi.fn()}
+        files={files}
+        topK={8}
+        onTopKChange={vi.fn()}
+        onNewChat={vi.fn()}
+        onFileUpload={vi.fn()}
+        onDeleteFile={vi.fn()}
+      />
+    );
+
+    const chatsTab = screen.getByRole('tab', { name: /cuộc trò chuyện/i });
+    const docsTab = screen.getByRole('tab', { name: /tài liệu/i });
+
+    expect(chatsTab).toHaveAttribute('aria-selected', 'true');
+    expect(docsTab).toHaveAttribute('aria-selected', 'false');
+
+    // Switch to documents tab
+    fireEvent.click(docsTab);
+    expect(chatsTab).toHaveAttribute('aria-selected', 'false');
+    expect(docsTab).toHaveAttribute('aria-selected', 'true');
+
+    // Switch back to chats tab
+    fireEvent.click(chatsTab);
+    expect(chatsTab).toHaveAttribute('aria-selected', 'true');
+    expect(docsTab).toHaveAttribute('aria-selected', 'false');
+  });
+
+  it('renders session relative timestamp when provided', () => {
+    const recentDate = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+    const sessions = [{ id: 's2', title: 'Phiên hỏi gần đây', created_at: recentDate, updated_at: recentDate }];
+    render(
+      <Sidebar
+        isOpen={true}
+        onClose={vi.fn()}
+        files={[]}
+        topK={8}
+        onTopKChange={vi.fn()}
+        onNewChat={vi.fn()}
+        onFileUpload={vi.fn()}
+        onDeleteFile={vi.fn()}
+        sessions={sessions}
+      />
+    );
+
+    expect(screen.getByText('Phiên hỏi gần đây')).toBeInTheDocument();
+    expect(screen.getByText(/5m trước/i)).toBeInTheDocument();
+  });
 });

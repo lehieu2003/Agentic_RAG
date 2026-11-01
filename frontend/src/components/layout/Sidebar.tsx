@@ -10,6 +10,7 @@ import {
   SlidersHorizontal,
   AlertCircle,
   MessageSquare,
+  Files,
 } from 'lucide-react';
 import type { FileInfo, SessionSummary } from '../../types';
 
@@ -31,7 +32,7 @@ export interface SidebarProps {
   onDismissError?: () => void;
 }
 
-const ALLOWED_EXTENSIONS = ['.pdf', '.docx', '.txt', '.md'];
+const ALLOWED_EXTENSIONS = ['.pdf', '.docx', '.txt', '.md', '.png', '.jpg', '.jpeg'];
 
 function isValidFileExtension(fileName: string): boolean {
   const lower = fileName.toLowerCase();
@@ -43,6 +44,27 @@ function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function formatSessionDate(dateStr?: string): string {
+  if (!dateStr) return '';
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return '';
+    const now = new Date();
+    const diffMs = now.getTime() - d.getTime();
+    if (diffMs < 0) return 'Vừa xong';
+    const diffMins = Math.floor(diffMs / (1000 * 60));
+    const diffHours = Math.floor(diffMins / 60);
+    const diffDays = Math.floor(diffHours / 24);
+    if (diffMins < 1) return 'Vừa xong';
+    if (diffMins < 60) return `${diffMins}m trước`;
+    if (diffHours < 24) return `${diffHours}h trước`;
+    if (diffDays < 7) return `${diffDays}d trước`;
+    return d.toLocaleDateString('vi-VN', { month: 'numeric', day: 'numeric' });
+  } catch {
+    return '';
+  }
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -62,6 +84,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   errorMessage,
   onDismissError,
 }) => {
+  const [activeTab, setActiveTab] = useState<'chats' | 'documents'>('chats');
   const [isDragging, setIsDragging] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -149,50 +172,110 @@ export const Sidebar: React.FC<SidebarProps> = ({
         aria-hidden="true"
       />
 
-      <aside className="fixed inset-y-0 left-0 z-40 md:relative md:z-0 flex flex-col w-72 sm:w-80 h-full bg-obsidian-surface border-r border-obsidian-border text-obsidian-text select-none shrink-0">
-        {/* Header / New Chat action */}
-        <div className="p-3 border-b border-obsidian-border space-y-2">
-          <div className="flex items-center justify-between md:hidden">
-            <span className="text-xs font-semibold text-white tracking-wide uppercase">
-              Bảng điều khiển
-            </span>
-            <button
-              type="button"
-              onClick={onClose}
-              aria-label="Close sidebar"
-              className="p-1 rounded-md text-obsidian-text-muted hover:text-white hover:bg-obsidian-subtle transition-colors"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-
+      <aside className="fixed inset-y-0 left-0 z-40 md:relative md:z-0 flex flex-col w-72 sm:w-80 h-full bg-zinc-950/95 md:bg-zinc-950/80 backdrop-blur-md border-r border-white/[0.08] text-zinc-300 select-none shrink-0">
+        {/* Mobile Header */}
+        <div className="flex items-center justify-between px-3 pt-3 pb-1 md:hidden shrink-0">
+          <span className="text-xs font-semibold text-zinc-300 tracking-wide uppercase">
+            Bảng điều khiển
+          </span>
           <button
             type="button"
-            onClick={onNewChat}
-            className="flex items-center justify-center gap-2 w-full py-2 px-3 rounded-lg bg-obsidian-subtle hover:bg-[#282e37] border border-obsidian-border text-white text-xs font-semibold tracking-wide transition-all shadow-sm active:scale-[0.99]"
+            onClick={onClose}
+            aria-label="Close sidebar"
+            className="p-1 rounded-lg text-zinc-400 hover:text-white hover:bg-white/[0.06] transition-colors"
           >
-            <Plus className="w-4 h-4 text-emerald-400" />
-            <span>Cuộc trò chuyện mới</span>
+            <X className="w-4 h-4" />
           </button>
         </div>
 
-        {/* Recent Chats Section */}
-        <div className="p-3 border-b border-obsidian-border flex flex-col max-h-[35vh] min-h-0">
-          <div className="flex items-center justify-between pb-2">
-            <div className="flex items-center gap-1.5 text-xs font-semibold text-obsidian-text">
-              <MessageSquare className="w-3.5 h-3.5 text-obsidian-text-muted" />
+        {/* Segmented Tabs Control */}
+        <div className="bg-zinc-900/90 border border-white/[0.08] p-1 rounded-xl flex gap-1 mx-3 my-2 shrink-0">
+          <button
+            type="button"
+            onClick={() => setActiveTab('chats')}
+            className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg text-xs transition-all ${
+              activeTab === 'chats'
+                ? 'bg-white/[0.08] text-white shadow-sm font-medium'
+                : 'text-zinc-400 hover:text-white'
+            }`}
+            role="tab"
+            aria-selected={activeTab === 'chats'}
+          >
+            <MessageSquare className="w-3.5 h-3.5" />
+            <span>Cuộc trò chuyện</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('documents')}
+            className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg text-xs transition-all ${
+              activeTab === 'documents'
+                ? 'bg-white/[0.08] text-white shadow-sm font-medium'
+                : 'text-zinc-400 hover:text-white'
+            }`}
+            role="tab"
+            aria-selected={activeTab === 'documents'}
+          >
+            <Files className="w-3.5 h-3.5" />
+            <span>Tài liệu</span>
+          </button>
+        </div>
+
+        {/* Error Alert Banner */}
+        {currentError && (
+          <div
+            role="alert"
+            className="mx-3 mb-2 p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-300 text-xs flex items-start justify-between gap-2 shadow-sm shrink-0"
+          >
+            <div className="flex items-start gap-2 min-w-0">
+              <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+              <span className="text-[11px] leading-tight break-words">{currentError}</span>
+            </div>
+            <button
+              type="button"
+              onClick={handleDismissError}
+              aria-label="Dismiss sidebar error"
+              className="text-rose-400 hover:text-rose-200 shrink-0 p-0.5 rounded transition-colors"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
+
+        {/* Chats Tab Content */}
+        <div className={activeTab === 'chats' ? 'flex flex-col flex-1 min-h-0' : 'hidden'}>
+          {/* New Chat Button */}
+          <div className="p-3 border-b border-white/[0.06] shrink-0">
+            <button
+              type="button"
+              onClick={onNewChat}
+              className="w-full bg-sky-500/10 hover:bg-sky-500/20 text-sky-400 border border-sky-500/30 hover:border-sky-400/50 rounded-xl py-2 px-3 text-xs font-medium flex items-center justify-center gap-2 transition-all shadow-sm active:scale-[0.99]"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Cuộc trò chuyện mới</span>
+            </button>
+          </div>
+
+          {/* Chat sessions header */}
+          <div className="px-3 pt-3 pb-2 flex items-center justify-between shrink-0">
+            <div className="flex items-center gap-1.5 text-xs font-semibold text-zinc-300">
+              <MessageSquare className="w-3.5 h-3.5 text-zinc-400" />
               <span>Cuộc trò chuyện gần đây</span>
             </div>
-            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-obsidian-subtle border border-obsidian-border text-obsidian-text-muted">
+            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-white/[0.04] border border-white/[0.08] text-zinc-400">
               {sessions.length}
             </span>
           </div>
 
-          <div className="flex-1 overflow-y-auto space-y-1 pr-0.5">
+          {/* Sessions List */}
+          <div className="flex-1 overflow-y-auto px-3 pb-3 space-y-1.5 min-h-0">
             {sessions.length === 0 ? (
-              <p className="text-center py-3 text-xs text-obsidian-text-muted">
-                Chưa có cuộc trò chuyện nào
-              </p>
+              <div className="text-center py-8 text-zinc-500">
+                <MessageSquare className="w-8 h-8 mx-auto mb-2 opacity-30" />
+                <p className="text-xs">Chưa có cuộc trò chuyện nào</p>
+                <p className="text-[10px] mt-1 text-zinc-600">
+                  Bắt đầu một câu hỏi mới để lưu vào đây
+                </p>
+              </div>
             ) : (
               sessions.map((session) => {
                 const isActive = activeSessionId === session.id;
@@ -207,23 +290,28 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         onSelectSession?.(session.id);
                       }
                     }}
-                    className={`flex items-center justify-between p-2 rounded-lg border text-xs cursor-pointer transition-colors group ${
+                    className={`group flex items-center justify-between p-2.5 rounded-xl border text-xs cursor-pointer transition-all ${
                       isActive
-                        ? 'bg-obsidian-subtle border-obsidian-accent-blue/50 text-white font-medium'
-                        : 'bg-obsidian-bg/40 hover:bg-obsidian-subtle/50 border-obsidian-border/50 text-obsidian-text hover:text-white'
+                        ? 'bg-white/[0.06] text-white border-l-2 border-sky-400 border-white/[0.08] shadow-sm font-medium'
+                        : 'bg-zinc-900/30 hover:bg-white/[0.04] border-white/[0.04] hover:border-white/[0.08] text-zinc-400 hover:text-zinc-200'
                     }`}
                   >
-                    <div className="flex items-center gap-2 min-w-0 pr-2">
+                    <div className="flex items-center gap-2.5 min-w-0 pr-2">
                       <MessageSquare
                         className={`w-3.5 h-3.5 shrink-0 ${
-                          isActive
-                            ? 'text-obsidian-accent-blue'
-                            : 'text-obsidian-text-muted group-hover:text-obsidian-text'
+                          isActive ? 'text-sky-400' : 'text-zinc-500 group-hover:text-zinc-300'
                         }`}
                       />
-                      <span className="truncate" title={session.title}>
-                        {session.title || 'Cuộc trò chuyện'}
-                      </span>
+                      <div className="flex flex-col min-w-0">
+                        <span className="truncate font-medium text-xs leading-tight" title={session.title}>
+                          {session.title || 'Cuộc trò chuyện'}
+                        </span>
+                        {(session.updated_at || session.created_at) && (
+                          <span className="text-[10px] text-zinc-500 mt-0.5">
+                            {formatSessionDate(session.updated_at || session.created_at)}
+                          </span>
+                        )}
+                      </div>
                     </div>
 
                     <button
@@ -239,7 +327,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       }}
                       aria-label="Xóa cuộc trò chuyện"
                       title="Xóa cuộc trò chuyện"
-                      className="p-1 rounded text-obsidian-text-muted hover:text-rose-400 hover:bg-rose-950/40 transition-colors shrink-0 opacity-80 md:opacity-0 md:group-hover:opacity-100 md:focus:opacity-100"
+                      className="p-1 rounded-lg text-zinc-500 hover:text-rose-400 hover:bg-rose-500/10 transition-colors shrink-0 opacity-80 md:opacity-0 md:group-hover:opacity-100 md:focus:opacity-100"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
@@ -250,163 +338,161 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
         </div>
 
-        {/* Error Alert Banner */}
-        {currentError && (
-          <div
-            role="alert"
-            className="mx-3 mt-2 p-2.5 rounded-lg bg-rose-500/15 border border-rose-500/30 text-rose-200 text-xs flex items-start justify-between gap-2"
-          >
-            <div className="flex items-start gap-2 min-w-0">
-              <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
-              <span className="text-[11px] leading-tight break-words">{currentError}</span>
+        {/* Documents Tab Content */}
+        <div className={activeTab === 'documents' ? 'flex flex-col flex-1 min-h-0' : 'hidden'}>
+          {/* TopK slider section */}
+          <div className="p-3 border-b border-white/[0.06] space-y-2 bg-zinc-900/40 shrink-0">
+            <div className="flex items-center justify-between text-xs">
+              <div className="flex items-center gap-1.5 text-zinc-300 font-medium">
+                <SlidersHorizontal className="w-3.5 h-3.5 text-sky-400" />
+                <span>Độ sâu tìm kiếm</span>
+              </div>
+              <span className="font-mono text-[11px] px-2 py-0.5 rounded-full bg-sky-500/10 text-sky-400 border border-sky-500/20 font-medium">
+                k = {topK}
+              </span>
             </div>
-            <button
-              type="button"
-              onClick={handleDismissError}
-              aria-label="Dismiss sidebar error"
-              className="text-rose-400 hover:text-white shrink-0 p-0.5 rounded transition-colors"
+
+            <input
+              type="range"
+              min="1"
+              max="20"
+              step="1"
+              value={topK}
+              onChange={(e) => onTopKChange(Number(e.target.value))}
+              aria-label="Search depth topK"
+              className="w-full h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-sky-400 border border-white/[0.06] focus:outline-none"
+            />
+
+            <div className="flex justify-between text-[10px] text-zinc-500 font-mono">
+              <span>1 đoạn</span>
+              <span>20 đoạn</span>
+            </div>
+          </div>
+
+          {/* File Dropzone */}
+          <div className="p-3 border-b border-white/[0.06] shrink-0">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".pdf,.docx,.txt,.md,.png,.jpg,.jpeg"
+              data-testid="file-upload-input"
+              onChange={handleFileInputChange}
+              className="hidden"
+            />
+
+            <div
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+              onClick={() => !isUploading && fileInputRef.current?.click()}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if ((e.key === 'Enter' || e.key === ' ') && !isUploading) {
+                  fileInputRef.current?.click();
+                }
+              }}
+              className={`border-dashed rounded-xl p-4 transition-all text-center cursor-pointer ${
+                isDragging
+                  ? 'border-sky-400 bg-sky-500/10 border-2'
+                  : 'border border-white/[0.12] hover:border-sky-400/60 bg-white/[0.02] hover:bg-sky-500/[0.04]'
+              }`}
             >
-              <X className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        )}
-
-        {/* TopK slider section */}
-        <div className="p-3 border-b border-obsidian-border space-y-2 bg-obsidian-bg/40">
-          <div className="flex items-center justify-between text-xs">
-            <div className="flex items-center gap-1.5 text-obsidian-text font-medium">
-              <SlidersHorizontal className="w-3.5 h-3.5 text-obsidian-accent-blue" />
-              <span>Độ sâu tìm kiếm</span>
-            </div>
-            <span className="font-mono text-[11px] px-1.5 py-0.5 rounded bg-obsidian-bg text-obsidian-accent-blue border border-obsidian-border">
-              k = {topK}
-            </span>
-          </div>
-
-          <input
-            type="range"
-            min="1"
-            max="20"
-            step="1"
-            value={topK}
-            onChange={(e) => onTopKChange(Number(e.target.value))}
-            aria-label="Search depth topK"
-            className="w-full h-1.5 bg-obsidian-bg rounded-lg appearance-none cursor-pointer accent-emerald-500 border border-obsidian-border focus:outline-none"
-          />
-
-          <div className="flex justify-between text-[10px] text-obsidian-text-muted">
-            <span>1 đoạn</span>
-            <span>20 đoạn</span>
-          </div>
-        </div>
-
-        {/* File Dropzone */}
-        <div className="p-3 border-b border-obsidian-border">
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".pdf,.docx,.txt,.md"
-            data-testid="file-upload-input"
-            onChange={handleFileInputChange}
-            className="hidden"
-          />
-
-          <div
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-            onDrop={handleDrop}
-            onClick={() => !isUploading && fileInputRef.current?.click()}
-            role="button"
-            tabIndex={0}
-            onKeyDown={(e) => {
-              if ((e.key === 'Enter' || e.key === ' ') && !isUploading) {
-                fileInputRef.current?.click();
-              }
-            }}
-            className={`border border-dashed rounded-lg p-3 text-center transition-all cursor-pointer ${
-              isDragging
-                ? 'border-emerald-500 bg-emerald-500/10'
-                : 'border-obsidian-border hover:border-obsidian-text-muted/60 bg-obsidian-bg/40 hover:bg-obsidian-subtle/50'
-            }`}
-          >
-            {isUploading ? (
-              <div className="flex flex-col items-center justify-center py-2 space-y-2">
-                <Loader2 className="w-6 h-6 text-emerald-400 animate-spin" />
-                <span className="text-xs font-medium text-emerald-300">
-                  Đang tải lên và lập chỉ mục...
-                </span>
-              </div>
-            ) : (
-              <div className="flex flex-col items-center justify-center py-1 space-y-1">
-                <UploadCloud className="w-5 h-5 text-obsidian-accent-blue" />
-                <span className="text-xs font-medium text-white">
-                  Tải lên tài liệu
-                </span>
-                <span className="text-[10px] text-obsidian-text-muted">
-                  Kéo thả hoặc nhấn để chọn (.pdf, .docx, .txt, .md)
-                </span>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Indexed Documents List */}
-        <div className="flex-1 flex flex-col min-h-0">
-          <div className="p-3 pb-2 flex items-center justify-between">
-            <div className="flex items-center gap-1.5 text-xs font-semibold text-obsidian-text">
-              <Database className="w-3.5 h-3.5 text-obsidian-text-muted" />
-              <span>Tài liệu đã lập chỉ mục</span>
-            </div>
-            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-obsidian-subtle border border-obsidian-border text-obsidian-text-muted">
-              {files.length}
-            </span>
-          </div>
-
-          <div className="flex-1 overflow-y-auto px-3 pb-3 space-y-1.5">
-            {files.length === 0 ? (
-              <div className="text-center py-8 text-obsidian-text-muted">
-                <FileText className="w-8 h-8 mx-auto mb-2 opacity-30" />
-                <p className="text-xs">Chưa có tài liệu nào</p>
-                <p className="text-[10px] mt-1 text-obsidian-text-muted/70">
-                  Tải tệp lên để bắt đầu phân tích
-                </p>
-              </div>
-            ) : (
-              files.map((file) => (
-                <div
-                  key={file.filename}
-                  className="flex items-center justify-between p-2 rounded-lg bg-obsidian-bg/50 hover:bg-obsidian-subtle border border-obsidian-border/50 transition-colors group"
-                >
-                  <div className="flex items-center gap-2 min-w-0 pr-2">
-                    <FileText className="w-4 h-4 text-emerald-400 shrink-0" />
-                    <div className="flex flex-col min-w-0">
-                      <span
-                        className="text-xs text-obsidian-text font-medium truncate"
-                        title={file.filename}
-                      >
-                        {file.filename}
-                      </span>
-                      <span className="text-[10px] text-obsidian-text-muted">
-                        {formatFileSize(file.size)}
-                      </span>
-                    </div>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDelete(file);
-                    }}
-                    aria-label={`Delete ${file.filename}`}
-                    className="p-1 rounded text-obsidian-text-muted hover:text-rose-400 hover:bg-rose-950/40 transition-colors shrink-0"
-                    title={`Xóa ${file.filename}`}
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
+              {isUploading ? (
+                <div className="flex flex-col items-center justify-center py-2 space-y-2">
+                  <Loader2 className="w-6 h-6 text-sky-400 animate-spin" />
+                  <span className="text-xs font-medium text-sky-300">
+                    Đang tải lên và lập chỉ mục...
+                  </span>
                 </div>
-              ))
-            )}
+              ) : (
+                <div className="flex flex-col items-center justify-center space-y-2">
+                  <div className="w-10 h-10 rounded-xl bg-sky-500/10 border border-sky-500/20 flex items-center justify-center text-sky-400 shadow-[0_0_12px_rgba(56,189,248,0.12)]">
+                    <UploadCloud className="w-5 h-5" />
+                  </div>
+                  <div className="space-y-0.5">
+                    <span className="text-xs font-medium text-white block">
+                      Tải lên tài liệu
+                    </span>
+                    <span className="text-[11px] text-zinc-400 block">
+                      Kéo thả hoặc nhấn để chọn tệp
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-center gap-1.5 pt-1 flex-wrap">
+                    {['PDF', 'DOCX', 'TXT', 'Ảnh'].map((badge) => (
+                      <span
+                        key={badge}
+                        className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-white/[0.04] border border-white/[0.08] text-zinc-400"
+                      >
+                        {badge}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Indexed Documents List */}
+          <div className="flex-1 flex flex-col min-h-0">
+            <div className="p-3 pb-2 flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-1.5 text-xs font-semibold text-zinc-300">
+                <Database className="w-3.5 h-3.5 text-zinc-400" />
+                <span>Tài liệu đã lập chỉ mục</span>
+              </div>
+              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-white/[0.04] border border-white/[0.08] text-zinc-400">
+                {files.length}
+              </span>
+            </div>
+
+            <div className="flex-1 overflow-y-auto px-3 pb-3 space-y-1.5 min-h-0">
+              {files.length === 0 ? (
+                <div className="text-center py-8 text-zinc-500">
+                  <FileText className="w-8 h-8 mx-auto mb-2 opacity-30" />
+                  <p className="text-xs">Chưa có tài liệu nào</p>
+                  <p className="text-[10px] mt-1 text-zinc-600">
+                    Tải tệp lên để bắt đầu phân tích
+                  </p>
+                </div>
+              ) : (
+                files.map((file) => (
+                  <div
+                    key={file.filename}
+                    className="group flex items-center justify-between p-2.5 rounded-xl bg-zinc-900/40 hover:bg-white/[0.04] border border-white/[0.04] hover:border-white/[0.08] transition-colors"
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0 pr-2">
+                      <div className="w-7 h-7 rounded-lg bg-sky-500/10 border border-sky-500/20 flex items-center justify-center text-sky-400 shrink-0">
+                        <FileText className="w-3.5 h-3.5" />
+                      </div>
+                      <div className="flex flex-col min-w-0">
+                        <span
+                          className="text-xs text-zinc-200 font-medium truncate"
+                          title={file.filename}
+                        >
+                          {file.filename}
+                        </span>
+                        <span className="text-[10px] text-zinc-500 font-mono">
+                          {formatFileSize(file.size)}
+                        </span>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDelete(file);
+                      }}
+                      aria-label={`Delete ${file.filename}`}
+                      className="p-1 rounded-lg text-zinc-500 hover:text-rose-400 hover:bg-rose-500/10 transition-colors shrink-0"
+                      title={`Xóa ${file.filename}`}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
         </div>
       </aside>
