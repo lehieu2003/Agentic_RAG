@@ -15,6 +15,7 @@ from src.retrieval.bm25 import BM25Retriever
 from src.retrieval.hybrid import HybridRetriever
 from src.retrieval.local import LocalRetriever
 from src.retrieval.reranker import CrossEncoderReranker
+from src.storage.session_store import SessionStore
 from src.vector_store.embedding import EmbeddingModel
 from src.vector_store.qdrant_store import QdrantVectorStore
 
@@ -167,6 +168,9 @@ async def lifespan(app: FastAPI):
         model_name=active_model,
         min_relevance_score=settings.min_relevance_score
     )
+
+    # 5. Session Store for multi-turn conversation memory
+    app.state.session_store = SessionStore()
 
     try:
         yield

@@ -13,8 +13,18 @@ from fastapi.responses import FileResponse
 from src.config import settings
 from src.ingestion.chunker import chunk_document
 from src.ingestion.document_extractor import extract_pages_from_document
-from src.models import FileSummary, QARequest, QAResponse, UploadResponse
+from src.models import (
+    ChatMessage,
+    FileSummary,
+    QARequest,
+    QAResponse,
+    SessionDetailResponse,
+    SessionListResponse,
+    SessionSummary,
+    UploadResponse,
+)
 from src.rag.agent import AgenticRAG
+from src.storage.session_store import SessionStore
 
 router = APIRouter(prefix="/api/v1")
 
@@ -271,6 +281,80 @@ def delete_document(request: Request, filename: str) -> Dict[str, Any]:
     }
 
 
+@router.get(
+    "/sessions",
+    response_model=SessionListResponse,
+    tags=["Hội thoại (Sessions)"],
+    summary="Danh sách tất cả các phiên hội thoại"
+)
+def list_sessions(request: Request) -> SessionListResponse:
+    """Liệt kê danh sách các phiên trò chuyện, sắp xếp theo thời gian cập nhật mới nhất."""
+    session_store = getattr(request.app.state, "session_store", None)
+    if session_store is None:
+        session_store = SessionStore()
+        request.app.state.session_store = session_store
+
+    sessions_raw = session_store.list_sessions(limit=50)
+    sessions = [
+        SessionSummary(
+            id=s["id"],
+            title=s["title"],
+            created_at=str(s["created_at"]),
+            updated_at=str(s["updated_at"]),
+        )
+        for s in sessions_raw
+    ]
+    return SessionListResponse(sessions=sessions)
+
+
+@router.get(
+    "/sessions/{session_id}",
+    response_model=SessionDetailResponse,
+    tags=["Hội thoại (Sessions)"],
+    summary="Chi tiết phiên hội thoại và lịch sử tin nhắn"
+)
+def get_session_detail(request: Request, session_id: str) -> SessionDetailResponse:
+    """Lấy thông tin chi tiết phiên hội thoại kèm toàn bộ tin nhắn đã gửi."""
+    session_store = getattr(request.app.state, "session_store", None)
+    if session_store is None:
+        session_store = SessionStore()
+        request.app.state.session_store = session_store
+
+    sess_raw = session_store.get_session(session_id)
+    if not sess_raw:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    messages_raw = session_store.get_messages(session_id)
+    messages = [ChatMessage(**m) for m in messages_raw]
+    return SessionDetailResponse(
+        session=SessionSummary(**sess_raw),
+        messages=messages,
+    )
+
+
+@router.delete(
+    "/sessions/{session_id}",
+    tags=["Hội thoại (Sessions)"],
+    summary="Xoá phiên hội thoại và toàn bộ tin nhắn liên quan"
+)
+def delete_session(request: Request, session_id: str) -> Dict[str, Any]:
+    """Xoá một phiên hội thoại khỏi cơ sở dữ liệu."""
+    session_store = getattr(request.app.state, "session_store", None)
+    if session_store is None:
+        session_store = SessionStore()
+        request.app.state.session_store = session_store
+
+    deleted = session_store.delete_session(session_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    return {
+        "status": "success",
+        "session_id": session_id,
+        "message": f"Đã xoá phiên hội thoại '{session_id}' thành công."
+    }
+
+
 @router.post(
     "/query",
     response_model=QAResponse,
@@ -282,9 +366,11 @@ def query_assistant(
     qa_request: QARequest
 ) -> QAResponse:
     """Truy vấn trợ lý hỏi đáp kỹ thuật. Hệ thống sẽ:
-    1. Tìm kiếm top-k đoạn tài liệu liên quan nhất trên Qdrant bằng vector embedding.
-    2. Gửi ngữ cảnh tới LLM (Google Gemini / OpenAI) để tổng hợp câu trả lời kèm trích dẫn nguồn: `[Tài liệu: ..., Trang ...]`.
-    3. Tự động từ chối (Abstention) nếu câu hỏi không có căn cứ trong tài liệu.
+    1. Quản lý phiên hội thoại và tải ngữ cảnh lịch sử hội thoại gần nhất.
+    2. Contextualize câu hỏi hiện tại dựa trên lịch sử để truy vấn chính xác.
+    3. Tìm kiếm top-k đoạn tài liệu liên quan nhất trên Qdrant & BM25 kết hợp Reranker.
+    4. Gửi ngữ cảnh tới LLM để tổng hợp câu trả lời kèm trích dẫn nguồn: `[Tài liệu: ..., Trang ...]`.
+    5. Lưu lại tin nhắn của người dùng và câu trả lời vào SessionStore.
     """
     retriever = getattr(request.app.state, "retriever", None)
     generator = getattr(request.app.state, "generator", None)
@@ -310,9 +396,47 @@ def query_assistant(
             min_relevance_score=settings.min_relevance_score
         )
 
+    # 1. Retrieve or initialize SessionStore
+    session_store = getattr(request.app.state, "session_store", None)
+    if session_store is None:
+        session_store = SessionStore()
+        request.app.state.session_store = session_store
+
+    # 2. Resolve or create session_id
+    session_title = qa_request.question[:40].strip() or "Cuộc trò chuyện mới"
+    req_session_id = (qa_request.session_id or "").strip()
+    if req_session_id:
+        existing = session_store.get_session(req_session_id)
+        if existing:
+            session_id = req_session_id
+        else:
+            session_id = session_store.create_session(session_id=req_session_id, title=session_title)
+    else:
+        session_id = session_store.create_session(title=session_title)
+
+    # 3. Retrieve recent messages for context
+    recent_messages = session_store.get_recent_messages(session_id, limit=10)
+
+    # 4. Invoke agent with conversation history
     try:
-        response = agent.answer(qa_request.question, top_k=qa_request.top_k)
+        response = agent.answer(qa_request.question, top_k=qa_request.top_k, history=recent_messages)
     except Exception as e:
         raise HTTPException(status_code=503, detail=f"Retrieval failure: {str(e)}")
 
-    return response
+    # 5. Persist user and assistant messages into session store
+    session_store.add_message(
+        session_id=session_id,
+        role="user",
+        content=qa_request.question,
+    )
+    session_store.add_message(
+        session_id=session_id,
+        role="assistant",
+        content=response.answer,
+        standalone_question=response.standalone_question,
+        citations=response.citations,
+        reasoning_steps=response.reasoning_steps,
+    )
+
+    # 6. Ensure returned response includes session_id
+    return response.model_copy(update={"session_id": session_id})

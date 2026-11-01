@@ -64,13 +64,19 @@ class QARequest(BaseModel):
         description="Số lượng đoạn văn bản liên quan nhất cần truy xuất từ Qdrant",
         examples=[3]
     )
+    session_id: Optional[str] = Field(
+        default=None,
+        description="ID phiên hội thoại cho ngữ cảnh đa lượt (multi-turn conversation)",
+        examples=["550e8400-e29b-41d4-a716-446655440000"]
+    )
 
     model_config = {
         "json_schema_extra": {
             "examples": [
                 {
                     "question": "Nhiệt độ tối đa cho phép của thân bơm là bao nhiêu độ?",
-                    "top_k": 3
+                    "top_k": 3,
+                    "session_id": "550e8400-e29b-41d4-a716-446655440000"
                 }
             ]
         }
@@ -87,4 +93,41 @@ class QAResponse(BaseModel):
     rewritten_queries: Optional[List[str]] = None
     reasoning_steps: Optional[List[str]] = None
     standalone_question: Optional[str] = None
+    session_id: Optional[str] = None
+
+
+class SessionSummary(BaseModel):
+    """Summary of a chat session."""
+
+    id: str
+    title: str
+    created_at: str
+    updated_at: str
+
+
+class SessionListResponse(BaseModel):
+    """List of all chat session summaries."""
+
+    sessions: List[SessionSummary]
+
+
+class ChatMessage(BaseModel):
+    """Represents a single message in a conversation session."""
+
+    role: str
+    content: str
+    citations: Optional[List[Citation]] = None
+    reasoning_steps: Optional[List[str]] = None
+    created_at: Optional[str] = None
+    id: Optional[str] = None
+    standalone_question: Optional[str] = None
+
+    model_config = {"extra": "ignore"}
+
+
+class SessionDetailResponse(BaseModel):
+    """Detailed chat session including history messages."""
+
+    session: SessionSummary
+    messages: List[ChatMessage]
 
