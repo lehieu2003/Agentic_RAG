@@ -179,16 +179,17 @@ class AgenticRAG:
         variations: List[str] = [clean_q]
         seen = {clean_q.lower()}
 
-        # 1. Calculation & formula query abstraction (strip concrete user numbers)
-        is_calc_query = any(w in clean_q.lower() for w in [
-            "tính", "tinh", "reynolds", "npsh", "cột áp", "cot ap",
-            "vận tốc", "van toc", "lưu lượng", "luu luong", "hiệu suất",
-            "hieu suat", "công suất", "cong suat", "sai số", "sai so", "dung sai"
-        ])
-        if is_calc_query:
-            stripped = re.sub(r"\b\d+([.,]\d+)?(\s*[a-zA-Z%⁻¹²³/−]+)?\b", "", clean_q)
-            stripped = re.sub(r"\s+", " ", stripped).strip(" :,-=")
-            if stripped:
+        # 1. Generic calculation & formula query abstraction (domain-agnostic)
+        # Detect calculation intent via intent verbs (tính, xác định, calculate, etc.) or mathematical assignments (var = number)
+        has_calc_intent = bool(re.search(r"\b(tính|tinh|xác định|xac dinh|tìm|tim|calculate|compute|determine)\b", clean_q, re.I))
+        has_equations = bool(re.search(r"=\s*[-+−–]?\d", clean_q))
+
+        if has_calc_intent or has_equations:
+            # Strip variable assignments and concrete numbers to form an abstract formula query
+            stripped = re.sub(r"[\wα-ωΑ-Ω₁-₉]+\s*=\s*[-+−–]?\d+([.,]\d+)?(\s*[^\s,;()]+)?", "", clean_q)
+            stripped = re.sub(r"[-+−–]?\d+([.,]\d+)?(\s*[\w%⁻¹²³/−]+)?", "", stripped)
+            stripped = re.sub(r"\s+", " ", stripped).strip(" :,-=.")
+            if stripped and len(stripped) > 3:
                 calc_variation = f"công thức {stripped}".strip()
                 if calc_variation.lower() not in seen:
                     seen.add(calc_variation.lower())
