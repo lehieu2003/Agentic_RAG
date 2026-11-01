@@ -31,7 +31,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
   const isEmpty = messages.length === 0;
 
   return (
-    <div className={`flex flex-col h-full bg-obsidian-bg relative overflow-hidden ${className}`}>
+    <div className={`flex flex-col h-full bg-zinc-950 relative overflow-hidden ${className}`}>
       {/* Scrollable message area */}
       <div className="flex-1 overflow-y-auto px-2 sm:px-4 py-4 space-y-2">
         {isEmpty ? (
@@ -56,7 +56,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
                   <div className="w-8 h-8 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0 mt-1 shadow-[0_0_12px_rgba(35,134,54,0.15)]">
                     <Sparkles className="w-4 h-4 animate-pulse" />
                   </div>
-                  <div className="flex items-center gap-2 px-4 py-3 rounded-2xl rounded-tl-sm bg-obsidian-subtle border border-obsidian-border text-obsidian-text-muted text-xs">
+                  <div className="flex items-center gap-2 px-4 py-3 rounded-2xl rounded-tl-sm bg-zinc-900/60 border border-white/[0.08] text-zinc-400 text-xs shadow-sm">
                     <Loader2 className="w-4 h-4 animate-spin text-emerald-400" />
                     <span>Đang truy xuất kiến thức và suy luận câu trả lời...</span>
                   </div>
@@ -70,7 +70,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
       </div>
 
       {/* Fixed bottom chat input */}
-      <div className="border-t border-obsidian-border bg-obsidian-surface/60 backdrop-blur-xs py-3 px-2 sm:px-4 shrink-0 z-10">
+      <div className="border-t border-white/[0.06] bg-zinc-950/80 backdrop-blur-md py-3 px-2 sm:px-4 shrink-0 z-10">
         <ChatInput
           onSendMessage={onSendMessage}
           isQuerying={isQuerying}

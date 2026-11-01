@@ -41,32 +41,41 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
   if (!activeDocument) {
     return (
       <div
-        className={`h-full flex flex-col bg-obsidian-bg border-l border-obsidian-border ${className}`}
+        className={`h-full flex flex-col bg-zinc-950 ${className}`}
       >
-        <div className="h-12 border-b border-obsidian-border bg-obsidian-surface px-4 flex items-center justify-between">
-          <div className="flex items-center gap-2 text-obsidian-text-muted text-sm font-medium">
-            <FileQuestion className="w-4 h-4 text-obsidian-accent-blue" />
+        <div className="h-[52px] bg-zinc-950/80 backdrop-blur-md border-b border-white/[0.06] px-4 flex items-center justify-between gap-3 shrink-0">
+          <div className="flex items-center gap-2 text-zinc-400 text-sm font-medium">
+            <div className="w-7 h-7 rounded-lg bg-sky-500/10 border border-sky-500/20 flex items-center justify-center shrink-0">
+              <FileQuestion className="w-3.5 h-3.5 text-sky-400" />
+            </div>
             <span>Tài liệu</span>
           </div>
           <button
             type="button"
             onClick={onClose}
             aria-label="Close document viewer"
-            className="p-1 rounded-md text-obsidian-text-muted hover:text-white hover:bg-obsidian-subtle transition-colors"
+            title="Đóng xem tài liệu"
+            className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/[0.06] transition-colors"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
-        <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
-          <div className="w-16 h-16 rounded-2xl bg-obsidian-subtle border border-obsidian-border/80 flex items-center justify-center mb-4 text-obsidian-text-muted">
-            <FileQuestion className="w-8 h-8 opacity-70" />
+        <div className="flex-1 flex flex-col items-center justify-center h-full p-8 text-center bg-zinc-950/50">
+          <div className="relative mb-4">
+            <div className="absolute -inset-2 bg-sky-500/10 rounded-2xl blur-lg pointer-events-none" />
+            <div className="relative w-14 h-14 rounded-2xl bg-zinc-900 border border-white/[0.08] flex items-center justify-center text-zinc-400">
+              <FileQuestion className="w-7 h-7 text-zinc-500" />
+            </div>
           </div>
-          <h3 className="text-sm font-medium text-obsidian-text mb-1">
+          <h3 className="text-sm font-medium text-zinc-200 mb-1.5">
             Chưa chọn tài liệu
           </h3>
-          <p className="text-xs text-obsidian-text-muted max-w-xs leading-relaxed">
-            Chọn hoặc bấm vào một trích dẫn tài liệu để xem nội dung
+          <p className="text-xs text-zinc-400 max-w-xs leading-relaxed mb-3">
+            Chọn hoặc bấm vào một trích dẫn để xem tài liệu nguồn
           </p>
+          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/[0.03] border border-white/[0.06] text-[11px] text-zinc-500 font-mono">
+            <span>Hỗ trợ PDF, DOCX, TXT, MD</span>
+          </div>
         </div>
       </div>
     );
@@ -107,45 +116,37 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
 
   return (
     <div
-      className={`h-full flex flex-col bg-obsidian-bg border-l border-obsidian-border ${className}`}
+      className={`h-full flex flex-col bg-zinc-950 ${className}`}
     >
       {/* Top Toolbar */}
-      <div className="h-12 border-b border-obsidian-border bg-obsidian-surface px-3 sm:px-4 flex items-center justify-between gap-2 shrink-0">
-        {/* Document Info & External Link */}
-        <div className="flex items-center gap-2 min-w-0">
-          <FileText className="w-4 h-4 text-obsidian-accent-blue shrink-0" />
+      <div className="h-[52px] bg-zinc-950/80 backdrop-blur-md border-b border-white/[0.06] px-4 flex items-center justify-between gap-3 shrink-0">
+        {/* Document Title */}
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="w-7 h-7 rounded-lg bg-sky-500/10 border border-sky-500/20 flex items-center justify-center shrink-0">
+            <FileText className="w-3.5 h-3.5 text-sky-400" />
+          </div>
           <span
-            className="text-xs sm:text-sm font-medium font-mono text-obsidian-text truncate max-w-[140px] sm:max-w-[200px] lg:max-w-[260px]"
+            className="text-sm font-medium text-zinc-100 font-mono truncate max-w-[140px] sm:max-w-[200px] lg:max-w-[260px]"
             title={filename}
           >
             {filename}
           </span>
-          <a
-            href={viewerUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            aria-label="Open in new tab"
-            title="Mở trong tab mới"
-            className="p-1 rounded-md text-obsidian-text-muted hover:text-white hover:bg-obsidian-subtle transition-colors shrink-0"
-          >
-            <ExternalLink className="w-3.5 h-3.5" />
-          </a>
         </div>
 
         {/* Page Navigation Controls */}
         {isPdf && (
-          <div className="flex items-center gap-1 bg-obsidian-subtle px-1.5 py-0.5 rounded-md border border-obsidian-border shrink-0">
+          <div className="flex items-center gap-1 bg-white/[0.04] border border-white/[0.08] rounded-lg px-2 py-1 text-xs shrink-0">
             <button
               type="button"
               aria-label="Previous page"
               title="Trang trước"
               disabled={currentPage <= 1}
               onClick={handlePrevPage}
-              className="p-1 rounded text-obsidian-text-muted hover:text-white disabled:opacity-30 disabled:hover:text-obsidian-text-muted disabled:cursor-not-allowed transition-colors"
+              className="p-1 hover:bg-white/[0.06] rounded text-zinc-400 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             >
               <ChevronLeft className="w-3.5 h-3.5" />
             </button>
-            <div className="flex items-center gap-1 text-[11px] text-obsidian-text-muted font-medium">
+            <div className="flex items-center gap-1 text-[11px] text-zinc-400 font-medium px-1">
               <span>Trang</span>
               <input
                 type="number"
@@ -155,7 +156,7 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
                 onBlur={submitPageInput}
                 onKeyDown={handleKeyDown}
                 aria-label="Page number"
-                className="w-10 h-5 px-1 text-center text-xs bg-obsidian-surface border border-obsidian-border/80 rounded text-obsidian-text focus:outline-none focus:border-obsidian-accent-blue font-mono [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                className="w-10 text-center font-mono bg-zinc-900 border border-white/[0.1] rounded text-xs py-0.5 text-white focus:outline-none focus:border-sky-500/50 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
               />
             </div>
             <button
@@ -163,7 +164,7 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
               aria-label="Next page"
               title="Trang sau"
               onClick={handleNextPage}
-              className="p-1 rounded text-obsidian-text-muted hover:text-white transition-colors"
+              className="p-1 hover:bg-white/[0.06] rounded text-zinc-400 hover:text-white transition-colors"
             >
               <ChevronRight className="w-3.5 h-3.5" />
             </button>
@@ -172,12 +173,33 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
 
         {/* Action Controls */}
         <div className="flex items-center gap-1 shrink-0">
+          <a
+            href={viewerUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="Open in new tab"
+            title="Mở trong tab mới"
+            className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/[0.06] transition-colors"
+          >
+            <ExternalLink className="w-4 h-4" />
+          </a>
+          {isPdf && (
+            <a
+              href={fileUrl}
+              download={filename}
+              aria-label="Download document"
+              title="Tải xuống tài liệu"
+              className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/[0.06] transition-colors"
+            >
+              <Download className="w-4 h-4" />
+            </a>
+          )}
           <button
             type="button"
             onClick={onClose}
             aria-label="Close document viewer"
             title="Đóng xem tài liệu"
-            className="p-1.5 rounded-md text-obsidian-text-muted hover:text-white hover:bg-obsidian-subtle transition-colors"
+            className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/[0.06] transition-colors"
           >
             <X className="w-4 h-4" />
           </button>
@@ -185,49 +207,35 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
       </div>
 
       {/* Main Preview Area */}
-      <div className="flex-1 min-h-0 flex flex-col relative bg-obsidian-bg">
+      <div className="flex-1 min-h-0 flex flex-col relative bg-zinc-950">
         {isPdf ? (
           <div className="flex-1 flex flex-col h-full overflow-hidden">
             <iframe
               key={viewerUrl}
               src={viewerUrl}
               title="Document Preview"
-              className="w-full flex-1 border-0 bg-obsidian-subtle"
+              className="w-full flex-1 border-0 bg-zinc-950"
             />
-            {/* Fallback download bar */}
-            <div className="h-9 px-4 border-t border-obsidian-border bg-obsidian-surface flex items-center justify-between text-xs text-obsidian-text-muted shrink-0">
-              <span className="truncate">Gặp sự cố hiển thị tệp PDF?</span>
-              <div className="flex items-center gap-3 shrink-0">
-                <a
-                  href={fileUrl}
-                  download={filename}
-                  aria-label="Download document"
-                  title="Tải xuống tài liệu"
-                  className="inline-flex items-center gap-1.5 text-obsidian-accent-blue hover:underline font-medium"
-                >
-                  <Download className="w-3.5 h-3.5" />
-                  <span>Tải xuống tài liệu</span>
-                </a>
-              </div>
-            </div>
           </div>
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
-            <div className="max-w-sm w-full bg-obsidian-surface border border-obsidian-border rounded-xl p-6 flex flex-col items-center shadow-lg">
-              <div className="w-12 h-12 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 mb-4">
-                <AlertCircle className="w-6 h-6" />
+            <div className="max-w-sm w-full bg-amber-500/10 border border-amber-500/20 text-amber-200 text-xs p-5 rounded-xl flex flex-col items-center text-center gap-3 shadow-lg">
+              <div className="w-10 h-10 rounded-xl bg-amber-500/20 flex items-center justify-center text-amber-400 shrink-0">
+                <AlertCircle className="w-5 h-5" />
               </div>
-              <h4 className="text-sm font-medium text-obsidian-text mb-2">
-                Không hỗ trợ xem trước trực tiếp
-              </h4>
-              <p className="text-xs text-obsidian-text-muted mb-5 leading-relaxed">
-                Tệp <span className="font-mono text-obsidian-text font-semibold">{filename}</span> không phải định dạng PDF nên không thể hiển thị trực tiếp trong khung xem trước. Vui lòng tải về máy để xem nội dung đầy đủ.
-              </p>
+              <div className="space-y-1.5">
+                <h4 className="text-sm font-medium text-amber-100">
+                  Không hỗ trợ xem trước trực tiếp
+                </h4>
+                <p className="text-amber-200/80 leading-relaxed">
+                  Tệp <span className="font-mono text-white font-semibold">{filename}</span> không phải định dạng PDF nên không thể hiển thị trực tiếp trong khung xem trước. Vui lòng tải về máy để xem nội dung đầy đủ.
+                </p>
+              </div>
               <a
                 href={fileUrl}
                 download={filename}
                 aria-label="Download document"
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-obsidian-accent-blue/15 hover:bg-obsidian-accent-blue/25 text-obsidian-accent-blue border border-obsidian-accent-blue/30 font-medium text-xs transition-colors shadow-sm"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-100 border border-amber-500/30 font-medium text-xs transition-colors shadow-sm"
               >
                 <Download className="w-3.5 h-3.5" />
                 <span>Tải xuống tài liệu</span>
