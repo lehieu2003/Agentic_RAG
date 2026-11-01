@@ -136,6 +136,17 @@ def render_assistant_message(
     if abstained:
         st.warning("⚠️ Thông tin không có trong tài liệu đã nạp. Hệ thống từ chối suy đoán để tránh sai lệch.")
 
+    reasoning_steps = []
+    if isinstance(message, QAResponse):
+        reasoning_steps = getattr(message, "reasoning_steps", []) or []
+    elif isinstance(message, dict):
+        reasoning_steps = message.get("reasoning_steps", []) or []
+
+    if reasoning_steps:
+        with st.expander(f"⚙️ Tiến trình suy luận & đối chiếu ({len(reasoning_steps)} bước)", expanded=False):
+            for step in reasoning_steps:
+                st.caption(f"• {step}")
+
     st.markdown(content)
 
     if not abstained and citations:

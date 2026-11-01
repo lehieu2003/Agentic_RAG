@@ -1,29 +1,17 @@
-"""ChatGPT-inspired dark theme CSS styles for Streamlit."""
+"""Modern, polished CSS styling for Streamlit UI."""
 
 CHATGPT_CUSTOM_CSS = """
 <style>
 /* ============================================================
-   ChatGPT Minimalist Dark Theme
+   Modern Professional Design System
    ============================================================ */
 
-/* Root Font & Background */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-
-html, body, [class*="css"] {
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
-}
-
-.stApp {
-    background-color: #212121 !important;
-    color: #ececec !important;
-}
-
-/* Hide Streamlit Clutter (deploy button, 3-dots menu, footer) */
+/* Hide unwanted Streamlit branding clutter */
 #MainMenu, footer, .stDeployButton {
     display: none !important;
 }
 
-/* Header & Toolbar transparent so sidebar toggle button is always accessible */
+/* Header & Toolbar: keep clean and accessible */
 header[data-testid="stHeader"] {
     background: transparent !important;
 }
@@ -34,285 +22,162 @@ header[data-testid="stHeader"] {
     background: transparent !important;
 }
 
-/* Ensure sidebar expand and collapse buttons (chevrons to toggle sidebar) are always visible and prominent */
+/* Sidebar Toggle Controls */
 [data-testid="stExpandSidebarButton"],
 button[data-testid="stExpandSidebarButton"],
 [data-testid="stSidebarCollapseButton"],
-[data-testid="stSidebarCollapseButton"] button,
-[data-testid="stSidebarCollapsedControl"],
-[data-testid="stSidebarCollapsedControl"] button {
+[data-testid="stSidebarCollapseButton"] button {
     display: inline-flex !important;
     visibility: visible !important;
     opacity: 1 !important;
-    z-index: 999999 !important;
-    background-color: #2f2f2f !important;
-    color: #ffffff !important;
-    border: 1px solid #555555 !important;
+    background-color: var(--secondary-background-color) !important;
+    border: 1px solid var(--border-color) !important;
     border-radius: 8px !important;
     padding: 6px 10px !important;
-    cursor: pointer !important;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4) !important;
+    transition: all 0.2s ease !important;
 }
 
-[data-testid="stExpandSidebarButton"]:hover,
-button[data-testid="stExpandSidebarButton"]:hover,
-[data-testid="stSidebarCollapseButton"]:hover,
-[data-testid="stSidebarCollapseButton"] button:hover,
-[data-testid="stSidebarCollapsedControl"] button:hover {
-    background-color: #3e3e3e !important;
-    border-color: #777777 !important;
-    color: #ffffff !important;
+/* Hero Section Container */
+.hero-wrapper {
+    max-width: 760px;
+    margin: 2.5rem auto 1.5rem auto;
+    text-align: center;
+    padding: 2.5rem 1.5rem 2rem 1.5rem;
+    border-radius: 16px;
+    background: linear-gradient(180deg, rgba(59, 130, 246, 0.05) 0%, rgba(0, 0, 0, 0) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.07);
 }
 
-[data-testid="stExpandSidebarButton"] svg,
-[data-testid="stExpandSidebarButton"] span,
-button[data-testid="stExpandSidebarButton"] svg,
-button[data-testid="stExpandSidebarButton"] span,
-[data-testid="stSidebarCollapseButton"] svg,
-[data-testid="stSidebarCollapseButton"] span,
-[data-testid="stSidebarCollapseButton"] button svg,
-[data-testid="stSidebarCollapseButton"] button span {
-    color: #ffffff !important;
-    fill: #ffffff !important;
+.hero-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11.5px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    padding: 4px 12px;
+    border-radius: 9999px;
+    background-color: rgba(59, 130, 246, 0.12);
+    color: #60a5fa;
+    border: 1px solid rgba(59, 130, 246, 0.25);
+    margin-bottom: 1rem;
 }
 
-/* Max Width Main Container (Centered like ChatGPT) */
-.block-container {
-    max-width: 820px !important;
-    padding-top: 3rem !important;
-    padding-bottom: 7rem !important;
-    margin: 0 auto !important;
+.hero-title {
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.25;
+    margin-bottom: 0.75rem;
 }
 
-/* ============================================================
-   Sidebar Styling
-   ============================================================ */
-[data-testid="stSidebar"] {
-    background-color: #171717 !important;
-    border-right: 1px solid #2f2f2f !important;
+.hero-subtitle {
+    font-size: 15px;
+    line-height: 1.6;
+    color: var(--text-color);
+    opacity: 0.75;
+    max-width: 580px;
+    margin: 0 auto;
 }
 
-[data-testid="stSidebar"] h1, 
-[data-testid="stSidebar"] h2, 
-[data-testid="stSidebar"] h3 {
-    color: #f0f0f0 !important;
-    font-weight: 600 !important;
+/* Prompt Suggestion Cards */
+.suggestion-header {
+    font-size: 13px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    opacity: 0.6;
+    margin: 1.5rem 0 0.75rem 0;
+    text-align: center;
 }
 
-[data-testid="stSidebar"] p, 
-[data-testid="stSidebar"] span, 
-[data-testid="stSidebar"] label {
-    color: #b4b4b4 !important;
-}
-
-/* Sidebar "New Chat" Button */
-[data-testid="stSidebar"] button[kind="secondary"],
-[data-testid="stSidebar"] .stButton > button {
-    border-radius: 20px !important;
-    border: 1px solid #3e3e3e !important;
-    background-color: #212121 !important;
-    color: #f3f3f3 !important;
-    font-weight: 500 !important;
-    padding: 8px 16px !important;
-    transition: all 0.2s ease-in-out !important;
-}
-
-[data-testid="stSidebar"] button[kind="secondary"]:hover,
-[data-testid="stSidebar"] .stButton > button:hover {
-    background-color: #2f2f2f !important;
-    border-color: #555555 !important;
-    color: #ffffff !important;
-}
-
-/* File Uploader Box in Sidebar */
-[data-testid="stFileUploader"] {
-    background-color: #212121 !important;
-    border: 1px dashed #3e3e3e !important;
-    border-radius: 12px !important;
-    padding: 10px !important;
-}
-
-/* ============================================================
-   Chat Messages Styling
-   ============================================================ */
-[data-testid="stChatMessage"] {
-    padding: 16px 0 !important;
-    border: none !important;
-    background-color: transparent !important;
-}
-
-/* User Message Bubble */
-div[data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) {
-    background-color: #2f2f2f !important;
-    border-radius: 18px !important;
-    padding: 12px 18px !important;
-    margin-left: auto !important;
-    margin-bottom: 12px !important;
-    max-width: 85% !important;
-    border: 1px solid #383838 !important;
-}
-
-div[data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) p {
-    color: #f4f4f4 !important;
-    margin-bottom: 0 !important;
-}
-
-/* Assistant Message Area */
-div[data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarAssistant"]) {
-    background-color: transparent !important;
-    margin-right: auto !important;
-    width: 100% !important;
-    padding-left: 0 !important;
-}
-
-div[data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarAssistant"]) p {
-    color: #ececec !important;
-    line-height: 1.65 !important;
-    font-size: 15.5px !important;
-}
-
-/* ============================================================
-   Bottom Floating Chat Input Bar (Capsule Pill)
-   ============================================================ */
-[data-testid="stChatInput"] {
-    max-width: 800px !important;
-    margin: 0 auto !important;
-    bottom: 24px !important;
-    background: transparent !important;
-}
-
-[data-testid="stChatInput"] > div {
-    background-color: #2f2f2f !important;
-    border: 1px solid #383838 !important;
-    border-radius: 28px !important;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25) !important;
-    padding: 4px 8px !important;
-    transition: border-color 0.2s ease, box-shadow 0.2s ease !important;
-}
-
-[data-testid="stChatInput"] > div:focus-within {
-    border-color: #555555 !important;
-    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4) !important;
-}
-
-[data-testid="stChatInput"] textarea {
-    color: #ececec !important;
-    background-color: transparent !important;
-    font-size: 15px !important;
-}
-
-[data-testid="stChatInput"] textarea::placeholder {
-    color: #8e8e8e !important;
-}
-
-[data-testid="stChatInput"] button {
-    border-radius: 50% !important;
-    background-color: #ececec !important;
-    color: #212121 !important;
-    width: 32px !important;
-    height: 32px !important;
-    padding: 0 !important;
-    transition: transform 0.15s ease !important;
-}
-
-[data-testid="stChatInput"] button:hover {
-    background-color: #ffffff !important;
-    transform: scale(1.05) !important;
-}
-
-/* ============================================================
-   Citation Chips, Badges & Evidence Expander
-   ============================================================ */
+/* Citation Badges (Pills) */
 .citation-container {
     display: flex;
     flex-wrap: wrap;
+    align-items: center;
     gap: 8px;
-    margin-top: 10px;
-    margin-bottom: 6px;
+    margin-top: 12px;
+    margin-bottom: 8px;
 }
 
-.citation-chip,
 .citation-badge {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    padding: 5px 12px;
+    padding: 6px 14px;
     border-radius: 20px;
-    background-color: #262626;
-    border: 1px solid #383838;
-    color: #10a37f !important;
+    background-color: rgba(59, 130, 246, 0.08);
+    border: 1px solid rgba(59, 130, 246, 0.24);
+    color: #60a5fa !important;
     font-size: 13px;
     font-weight: 500;
     text-decoration: none !important;
     cursor: pointer;
-    transition: all 0.2s ease-in-out;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.citation-chip:hover,
 .citation-badge:hover {
-    background-color: #2e2e2e;
-    border-color: #10a37f;
-    color: #10a37f !important;
-    text-decoration: underline !important;
+    background-color: rgba(59, 130, 246, 0.16);
+    border-color: rgba(59, 130, 246, 0.45);
+    color: #93c5fd !important;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);
 }
 
-[data-testid="stExpander"] {
-    background-color: #1a1a1a !important;
-    border: 1px solid #2e2e2e !important;
-    border-radius: 12px !important;
-    margin-top: 8px !important;
+/* Chat Input Bar (Subtle Modern Rounded) */
+[data-testid="stChatInput"] {
+    max-width: 820px !important;
+    margin: 0 auto !important;
+    padding-bottom: 1rem !important;
 }
 
-[data-testid="stExpander"] summary {
-    color: #b4b4b4 !important;
-    font-size: 13.5px !important;
+[data-testid="stChatInput"] > div {
+    border-radius: 24px !important;
+    border: 1px solid var(--border-color) !important;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12) !important;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease !important;
 }
 
-[data-testid="stExpander"] summary:hover {
-    color: #ececec !important;
+[data-testid="stChatInput"] > div:focus-within {
+    border-color: var(--primary-color) !important;
+    box-shadow: 0 4px 24px rgba(59, 130, 246, 0.2) !important;
 }
 
-/* ============================================================
-   Minimalist Empty State Hero
-   ============================================================ */
-.gpt-hero-container {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    min-height: 55vh;
-    text-align: center;
-    padding: 20px;
-}
-
-.gpt-hero-icon {
-    width: 60px;
-    height: 60px;
-    border-radius: 50%;
-    background: linear-gradient(135deg, #10a37f 0%, #1a7f64 100%);
+/* File items in sidebar */
+.file-item-card {
     display: flex;
     align-items: center;
-    justify-content: center;
-    font-size: 28px;
-    margin-bottom: 20px;
-    box-shadow: 0 4px 16px rgba(16, 163, 127, 0.25);
+    justify-content: space-between;
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    background-color: var(--secondary-background-color);
+    margin-bottom: 6px;
+    font-size: 13px;
 }
 
-.gpt-hero-title {
-    font-size: 28px;
-    font-weight: 600;
-    color: #f3f3f3;
-    margin-bottom: 8px;
-    letter-spacing: -0.5px;
+.file-item-title {
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
-.gpt-hero-subtitle {
-    font-size: 15px;
-    color: #8e8e8e;
-    max-width: 520px;
-    line-height: 1.5;
-    margin: 0 auto;
+.file-item-size {
+    font-size: 11px;
+    opacity: 0.6;
+    margin-left: 6px;
+}
+
+/* Evidence Card Styling */
+.evidence-card {
+    padding: 10px 14px;
+    border-radius: 8px;
+    background-color: rgba(255, 255, 255, 0.02);
+    border-left: 3px solid #3b82f6;
+    margin-bottom: 10px;
 }
 </style>
 """
-
