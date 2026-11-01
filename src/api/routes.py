@@ -293,19 +293,22 @@ def query_assistant(
     if retriever is None or (generator is None and agent_instance is None):
         raise HTTPException(status_code=503, detail="RAG system not initialized.")
 
-    llm_client = getattr(agent_instance, "llm_client", getattr(generator, "llm_client", None))
-    provider = getattr(agent_instance, "provider", getattr(generator, "provider", settings.llm_provider))
-    model_name = getattr(agent_instance, "model_name", getattr(generator, "model_name", settings.gemini_model))
-    reranker = getattr(request.app.state, "reranker", None)
+    if agent_instance is not None and getattr(agent_instance, "retriever", None) is retriever:
+        agent = agent_instance
+    else:
+        llm_client = getattr(agent_instance, "llm_client", getattr(generator, "llm_client", None))
+        provider = getattr(agent_instance, "provider", getattr(generator, "provider", settings.llm_provider))
+        model_name = getattr(agent_instance, "model_name", getattr(generator, "model_name", settings.gemini_model))
+        reranker = getattr(request.app.state, "reranker", None)
 
-    agent = AgenticRAG(
-        retriever=retriever,
-        reranker=reranker,
-        llm_client=llm_client,
-        provider=provider,
-        model_name=model_name,
-        min_relevance_score=settings.min_relevance_score
-    )
+        agent = AgenticRAG(
+            retriever=retriever,
+            reranker=reranker,
+            llm_client=llm_client,
+            provider=provider,
+            model_name=model_name,
+            min_relevance_score=settings.min_relevance_score
+        )
 
     try:
         response = agent.answer(qa_request.question, top_k=qa_request.top_k)

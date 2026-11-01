@@ -6,6 +6,7 @@ import unicodedata
 from typing import Any, Dict, List, Optional, TypedDict
 from langgraph.graph import StateGraph, START, END
 
+from src.config import settings
 from src.models import Citation, DocumentChunk, QAResponse, RetrievalResult
 from src.rag.generator import RAGGenerator
 from src.rag.prompt import ABSTAIN_PHRASE, build_rag_prompt
@@ -98,24 +99,32 @@ class AgenticRAG:
         llm_client: Optional[Any] = None,
         provider: str = "gemini",
         model_name: Optional[str] = None,
-        min_relevance_score: float = 0.35,
-        max_retries: int = 1,
-        max_gen_retries: int = 1
+        min_relevance_score: Optional[float] = None,
+        max_retries: Optional[int] = None,
+        max_gen_retries: Optional[int] = None,
+        candidate_pool_size: Optional[int] = None,
+        top_preservation_k: Optional[int] = None,
+        complex_query_threshold: Optional[int] = None,
+        complex_query_top_k: Optional[int] = None,
     ) -> None:
         self.retriever = retriever
         self.reranker = reranker
         self.llm_client = llm_client
         self.provider = provider
         self.model_name = model_name or ("gemini-3.5-flash-lite" if provider == "gemini" else "gpt-4o-mini")
-        self.min_relevance_score = min_relevance_score
-        self.max_retries = max_retries
-        self.max_gen_retries = max_gen_retries
+        self.min_relevance_score = min_relevance_score if min_relevance_score is not None else settings.min_relevance_score
+        self.max_retries = max_retries if max_retries is not None else settings.max_retries
+        self.max_gen_retries = max_gen_retries if max_gen_retries is not None else settings.max_gen_retries
+        self.candidate_pool_size = candidate_pool_size if candidate_pool_size is not None else settings.candidate_pool_size
+        self.top_preservation_k = top_preservation_k if top_preservation_k is not None else settings.top_preservation_k
+        self.complex_query_threshold = complex_query_threshold if complex_query_threshold is not None else settings.complex_query_threshold
+        self.complex_query_top_k = complex_query_top_k if complex_query_top_k is not None else settings.complex_query_top_k
 
         self.generator = RAGGenerator(
             llm_client=llm_client,
             provider=provider,
             model_name=self.model_name,
-            min_relevance_score=min_relevance_score
+            min_relevance_score=self.min_relevance_score
         )
 
         # Build and compile LangGraph StateGraph
@@ -179,29 +188,13 @@ class AgenticRAG:
         variations: List[str] = [clean_q]
         seen = {clean_q.lower()}
 
-        # 1. Generic calculation & formula query abstraction (domain-agnostic)
-        # Detect calculation intent via intent verbs (tính, xác định, calculate, etc.) or mathematical assignments (var = number)
-        has_calc_intent = bool(re.search(r"\b(tính|tinh|xác định|xac dinh|tìm|tim|calculate|compute|determine)\b", clean_q, re.I))
-        has_equations = bool(re.search(r"=\s*[-+−–]?\d", clean_q))
-
-        if has_calc_intent or has_equations:
-            # Strip variable assignments and concrete numbers to form an abstract formula query
-            stripped = re.sub(r"[\wα-ωΑ-Ω₁-₉]+\s*=\s*[-+−–]?\d+([.,]\d+)?(\s*[^\s,;()]+)?", "", clean_q)
-            stripped = re.sub(r"[-+−–]?\d+([.,]\d+)?(\s*[\w%⁻¹²³/−]+)?", "", stripped)
-            stripped = re.sub(r"\s+", " ", stripped).strip(" :,-=.")
-            if stripped and len(stripped) > 3:
-                calc_variation = f"công thức {stripped}".strip()
-                if calc_variation.lower() not in seen:
-                    seen.add(calc_variation.lower())
-                    variations.append(calc_variation)
-
         if self.llm_client is not None:
             prompt = (
                 f"Cho câu hỏi tra cứu kỹ thuật: '{clean_q}'.\n"
-                f"Hãy tạo ra 3 biến thể tìm kiếm ngắn gọn:\n"
-                f"1. Thuật ngữ tiếng Anh chuyên ngành hoặc tên tiêu chuẩn quốc tế (ISO/IEC) tương đương.\n"
-                f"2. Cụm từ mở rộng kèm lĩnh vực kỹ thuật/đo lường cụ thể.\n"
-                f"3. Từ khóa hoặc tên công thức/nguyên lý tổng quát (nếu câu hỏi có số liệu tính toán, hãy bỏ các con số cụ thể để tìm trúng trang chứa công thức trong tiêu chuẩn).\n"
+                f"Hãy tạo ra 2 đến 4 biến thể tìm kiếm ngắn gọn nhằm truy xuất tài liệu chính xác nhất:\n"
+                f"1. Phân rã nhiệm vụ: Nếu câu hỏi gồm nhiều yêu cầu/tiểu mục con, tạo các truy vấn tìm kiếm riêng biệt cho từng yêu cầu.\n"
+                f"2. Khái quát hóa công thức: Nếu câu hỏi chứa số liệu tính toán hoặc bài toán cụ thể, hãy tạo truy vấn tìm công thức/nguyên lý/tiêu chuẩn gốc (loại bỏ các con số cụ thể).\n"
+                f"3. Thuật ngữ quốc tế/tiêu chuẩn: Cung cấp thuật ngữ tiếng Anh chuyên ngành hoặc tên tiêu chuẩn kỹ thuật liên quan (ví dụ ISO, IEC, TCVN).\n"
                 f"Mỗi biến thể trên một dòng mới. Không thêm số thứ tự, gạch đầu dòng, hay giải thích."
             )
             raw_text = self._call_llm(prompt)
@@ -213,25 +206,36 @@ class AgenticRAG:
                 if line and line.lower() not in seen:
                     seen.add(line.lower())
                     variations.append(line)
-                    if len(variations) >= 3:
+                    if len(variations) >= 4:
                         break
 
+        # Always add unaccented variation for OCR and diacritic-insensitive tolerance
         if unaccented_q.lower() not in seen:
             seen.add(unaccented_q.lower())
             variations.append(unaccented_q)
 
+        # Fallback query decomposition when LLM is unavailable (offline / mock mode)
         if len(variations) < 3:
-            fallback = [
-                f"{clean_q} thông số kỹ thuật",
-                f"{clean_q} hướng dẫn vận hành",
-                f"{clean_q} tiêu chuẩn kỹ thuật"
+            list_items = [
+                re.sub(r"^[\s*•\-\d\.]+", "", line).strip()
+                for line in clean_q.splitlines()
+                if line.strip().startswith(("-", "•", "*", "1.", "2.", "3.", "4.", "5."))
             ]
-            for item in fallback:
-                if item.lower() not in seen:
+            for item in list_items:
+                if item and len(item) > 10 and item.lower() not in seen:
                     seen.add(item.lower())
                     variations.append(item)
-                    if len(variations) >= 3:
+                    if len(variations) >= 4:
                         break
+
+        # Fallback abstract formula query when equations/numbers are present
+        if len(variations) < 3 and bool(re.search(r"=\s*[-+−–]?\d", clean_q)):
+            stripped = re.sub(r"[\wα-ωΑ-Ω₁-₉]+\s*=\s*[-+−–]?\d+([.,]\d+)?(\s*[^\s,;()]+)?", "", clean_q)
+            stripped = re.sub(r"[-+−–]?\d+([.,]\d+)?(\s*[\w%⁻¹²³/−]+)?", "", stripped)
+            stripped = re.sub(r"\s+", " ", stripped).strip(" :,-=.")
+            if stripped and len(stripped) > 3 and stripped.lower() not in seen:
+                seen.add(stripped.lower())
+                variations.append(stripped)
 
         return variations[:4]
 
@@ -253,7 +257,7 @@ class AgenticRAG:
                 merged[key] = r
 
         sorted_results = sorted(merged.values(), key=lambda r: r.score, reverse=True)
-        limit = max(top_k * 4, 20)
+        limit = max(top_k * 4, self.candidate_pool_size)
         return sorted_results[:limit]
 
     def multi_query_retrieve(self, queries: List[str], top_k: int = 5) -> List[RetrievalResult]:
@@ -263,7 +267,7 @@ class AgenticRAG:
 
         guaranteed_diverse: Dict[Any, RetrievalResult] = {}
         all_collected: List[RetrievalResult] = []
-        fetch_k = max(top_k * 4, 20)
+        fetch_k = max(top_k * 4, self.candidate_pool_size)
 
         for q in queries:
             if not q or not q.strip():
@@ -411,7 +415,7 @@ class AgenticRAG:
         new_chunks = self.multi_query_retrieve(queries_to_run, top_k=top_k)
         existing = state.get("candidate_chunks", [])
         merged = self._merge_chunks(existing + new_chunks, top_k=top_k)
-        candidate_pool = merged[:20]
+        candidate_pool = merged[:self.candidate_pool_size]
         max_score = max((c.score for c in candidate_pool), default=0.0)
 
         steps = list(state.get("reasoning_steps", []))
@@ -430,20 +434,22 @@ class AgenticRAG:
         clean_q = state.get("clean_question", state["question"])
         candidates = state.get("candidate_chunks", [])
         top_k = state.get("top_k", 5)
+        # For complex multi-part queries, expand effective context according to configuration
+        target_k = max(top_k, self.complex_query_top_k) if len(clean_q) > self.complex_query_threshold else top_k
         steps = list(state.get("reasoning_steps", []))
 
         if self.reranker is not None and candidates:
             try:
-                reranked = self.reranker.rerank(clean_q, candidates, top_k=top_k)
+                reranked = self.reranker.rerank(clean_q, candidates, top_k=target_k)
             except Exception as e:
                 steps.append(f"4. rerank: Cảnh báo lỗi reranker ({str(e)}), dùng kết quả truy xuất gốc.")
-                reranked = candidates[:top_k]
+                reranked = candidates[:target_k]
         else:
-            reranked = candidates[:top_k]
+            reranked = candidates[:target_k]
 
         # Guard: Preserve top candidates from hybrid search if absent from reranked set
         reranked_keys = {self._get_chunk_key(r.chunk) for r in reranked}
-        for top_candidate in candidates[:2]:
+        for top_candidate in candidates[:self.top_preservation_k]:
             key = self._get_chunk_key(top_candidate.chunk)
             if key not in reranked_keys:
                 reranked.append(top_candidate)

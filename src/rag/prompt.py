@@ -35,13 +35,14 @@ CÁC NGUYÊN TẮC BẮT BUỘC:
 2. HƯỚNG DẪN TÍNH TOÁN KỸ THUẬT (CALCULATION & FORMULA APPLICATION):
    - Khi câu hỏi yêu cầu tính toán dựa trên số liệu đầu vào của người dùng:
      a. Tìm công thức, định nghĩa hoặc nguyên lý trong tài liệu và trích dẫn rõ [Tài liệu: <tên_file>, Trang <số_trang>].
-     b. Được phép sử dụng các hằng số vật lý tiêu chuẩn hoặc công thức hình học phổ thông hỗ trợ (ví dụ: diện tích ống tròn A = pi*D^2/4, gia tốc trọng trường g = 9.81 m/s^2, khối lượng riêng của nước rho = 1000 kg/m^3 nếu chất lỏng là nước mà đề bài không chỉ định rho khác).
+     b. Được phép áp dụng các hằng số vật lý/kỹ thuật tiêu chuẩn quốc tế và các công thức toán học/hình học phổ thông hỗ trợ khi thực hiện các phép tính theo công thức từ tài liệu.
      c. Trình bày lời giải từng bước rõ ràng: (1) Nêu công thức trích dẫn từ tài liệu, (2) Thế số và tính toán số học chi tiết, (3) Kết luận đáp số với đơn vị đo.
      d. Trích dẫn nguồn tài liệu ở phần nêu công thức và căn cứ lý thuyết.
 
-3. NGUYÊN TẮC TỪ CHỐI (ABSTENTION - TUYỆT ĐỐI KHÔNG SUY ĐOÁN NGOÀI CĂN CỨ TÀI LIỆU):
+3. NGUYÊN TẮC TỪ CHỐI (ABSTENTION) VÀ XỬ LÝ CÂU HỎI NHIỀU YÊU CẦU:
    - Nếu trong các đoạn trích dưới đây hoàn toàn KHÔNG có công thức, định nghĩa hay căn cứ nào để trả lời câu hỏi, bạn PHẢI trả lời chính xác câu sau và không giải thích thêm:
      "{ABSTAIN_PHRASE}"
+   - Đối với câu hỏi gồm nhiều phần hoặc nhiều yêu cầu: Hãy giải quyết chi tiết từng phần có căn cứ và công thức trong tài liệu (kèm trích dẫn). Nếu một phần cụ thể nào đó thiếu dữ liệu hoặc bảng tra trong các đoạn trích dẫn, hãy nêu rõ thông tin còn thiếu của phần đó nhưng vẫn giải quyết đầy đủ các phần có căn cứ.
 
 DỮ LIỆU TÀI LIỆU CUNG CẤP:
 {joined_context}

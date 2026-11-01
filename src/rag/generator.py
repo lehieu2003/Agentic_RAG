@@ -5,6 +5,7 @@ from pathlib import Path
 import re
 from typing import Any, List, Optional
 import unicodedata
+from src.config import settings
 from src.models import Citation, QAResponse, RetrievalResult
 from src.rag.prompt import ABSTAIN_PHRASE, build_rag_prompt
 
@@ -23,12 +24,14 @@ class RAGGenerator:
         llm_client: Optional[Any] = None,
         provider: str = "gemini",
         model_name: Optional[str] = None,
-        min_relevance_score: float = 0.35
+        min_relevance_score: float = 0.35,
+        max_page_range: Optional[int] = None
     ):
         self.llm_client = llm_client
         self.provider = provider
         self.model_name = model_name or ("gemini-3.5-flash-lite" if provider == "gemini" else "gpt-4o-mini")
         self.min_relevance_score = min_relevance_score
+        self.max_page_range = max_page_range if max_page_range is not None else settings.max_citation_page_range
 
     def extract_raw_citations(self, text: str) -> List[tuple]:
         """Extract document names and page numbers from text supporting multiple pages and ranges.
@@ -63,7 +66,7 @@ class RAGGenerator:
                 # Check for ranges like 1-3 or 1–3
                 for r in re.finditer(r"(\d+)\s*[-–—]\s*(\d+)", raw_pages):
                     start, end = int(r.group(1)), int(r.group(2))
-                    for p in range(start, min(end + 1, start + 50)):
+                    for p in range(start, min(end + 1, start + self.max_page_range)):
                         page_numbers.add(p)
                 # Check for individual numbers
                 for num in re.findall(r"\b\d+\b", raw_pages):
@@ -94,7 +97,12 @@ class RAGGenerator:
         raw_clean = raw_output.strip()
 
         # Check for explicit abstention
-        if ABSTAIN_PHRASE.lower() in raw_clean.lower():
+        is_explicit_abstain = (
+            raw_clean == ABSTAIN_PHRASE
+            or raw_clean.rstrip(".").strip() == ABSTAIN_PHRASE.rstrip(".")
+            or (not retrieved_chunks and ABSTAIN_PHRASE.lower() in raw_clean.lower())
+        )
+        if is_explicit_abstain:
             return QAResponse(
                 answer=ABSTAIN_PHRASE,
                 citations=[],

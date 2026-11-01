@@ -28,6 +28,13 @@ class Settings(BaseSettings):
     rerank_top_k: int = 5
     chunk_size: int = 1200
     chunk_overlap: int = 200
+    max_retries: int = 1
+    max_gen_retries: int = 1
+    candidate_pool_size: int = 25
+    top_preservation_k: int = 2
+    complex_query_threshold: int = 250
+    complex_query_top_k: int = 12
+    max_citation_page_range: int = 50
 
     model_config = SettingsConfigDict(
         env_file=".env",
