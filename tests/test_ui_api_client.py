@@ -100,3 +100,20 @@ def test_session_management_methods():
         assert client.delete_session("s1") is True
 
 
+def test_session_methods_url_encode_id():
+    client = ApiClient(base_url="http://testserver/api/v1")
+    special_id = "s 1/special#id"
+
+    with patch("httpx.Client.get") as mock_get:
+        mock_get.return_value = httpx.Response(200, json={"session": {"id": special_id}, "messages": []})
+        client.get_session(special_id)
+        called_url = mock_get.call_args[0][0]
+        assert "s%201%2Fspecial%23id" in called_url
+
+    with patch("httpx.Client.delete") as mock_del:
+        mock_del.return_value = httpx.Response(200, json={"message": "Deleted"})
+        client.delete_session(special_id)
+        called_url = mock_del.call_args[0][0]
+        assert "s%201%2Fspecial%23id" in called_url
+
+

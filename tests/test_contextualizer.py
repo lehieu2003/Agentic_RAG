@@ -44,7 +44,7 @@ def test_contextualize_with_history_rewrites_query(mock_agent):
 
 def test_contextualize_without_history_passes_through(mock_agent):
     response = mock_agent.answer("Tính Reynolds khi D = 0.2m", top_k=5, history=[])
-    assert response.standalone_question == "Tính Reynolds khi D = 0.2m"
+    assert response.standalone_question is None
 
 
 def test_contextualize_none_history_bypasses_llm():
@@ -62,7 +62,7 @@ def test_contextualize_none_history_bypasses_llm():
     agent = AgenticRAG(retriever=mock_retriever, llm_client=mock_llm, provider="mock")
     response = agent.answer("Tính Reynolds khi D = 0.2m", top_k=5, history=None)
 
-    assert response.standalone_question == "Tính Reynolds khi D = 0.2m"
+    assert response.standalone_question is None
     # Ensure contextualizer LLM prompt was never called when history=None
     for call_args in mock_llm.generate.call_args_list:
         prompt_arg = call_args[0][0]
@@ -93,7 +93,7 @@ def test_contextualize_llm_failure_falls_back_to_raw_question():
     history = [{"role": "user", "content": "Thông số máy bơm"}]
     response = agent.answer("Nó nặng bao nhiêu kg?", top_k=5, history=history)
 
-    assert response.standalone_question == "Nó nặng bao nhiêu kg?"
+    assert response.standalone_question is None
 
 
 def test_build_rag_prompt_with_history():

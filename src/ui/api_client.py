@@ -1,6 +1,7 @@
 """API Client wrapper communicating with FastAPI backend."""
 
 import mimetypes
+import urllib.parse
 from typing import Any, Dict, List, Optional
 import httpx
 from src.models import QAResponse
@@ -159,7 +160,8 @@ class ApiClient:
             Session detail dict or None.
         """
         try:
-            url = f"{self.base_url}/sessions/{session_id}" if self.base_url.endswith("/api/v1") else f"{self.base_url}/api/v1/sessions/{session_id}"
+            encoded_sid = urllib.parse.quote(str(session_id), safe="")
+            url = f"{self.base_url}/sessions/{encoded_sid}" if self.base_url.endswith("/api/v1") else f"{self.base_url}/api/v1/sessions/{encoded_sid}"
             with httpx.Client(timeout=self.timeout) as client:
                 resp = client.get(url)
                 if resp.status_code == 200:
@@ -178,7 +180,8 @@ class ApiClient:
             True if deleted successfully, False otherwise.
         """
         try:
-            url = f"{self.base_url}/sessions/{session_id}" if self.base_url.endswith("/api/v1") else f"{self.base_url}/api/v1/sessions/{session_id}"
+            encoded_sid = urllib.parse.quote(str(session_id), safe="")
+            url = f"{self.base_url}/sessions/{encoded_sid}" if self.base_url.endswith("/api/v1") else f"{self.base_url}/api/v1/sessions/{encoded_sid}"
             with httpx.Client(timeout=self.timeout) as client:
                 resp = client.delete(url)
                 return resp.status_code == 200

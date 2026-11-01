@@ -1,7 +1,10 @@
+import re
 import tempfile
 import pytest
 from pathlib import Path
 from src.storage.session_store import SessionStore
+
+ISO_8601_REGEX = r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$"
 
 
 @pytest.fixture
@@ -19,6 +22,8 @@ def test_create_and_get_session(store):
     assert sess["title"] == "Câu hỏi máy bơm"
     assert "created_at" in sess
     assert "updated_at" in sess
+    assert bool(re.match(ISO_8601_REGEX, sess["created_at"]))
+    assert bool(re.match(ISO_8601_REGEX, sess["updated_at"]))
 
 
 def test_create_session_defaults(store):
@@ -75,6 +80,7 @@ def test_add_message_with_metadata(store):
     assert msg["standalone_question"] == "Độ nhớt động lực học của nước ở 20 độ C là bao nhiêu?"
     assert msg["citations"] == [{"doc_name": "tcvn_pump.pdf", "page_number": 12}]
     assert msg["reasoning_steps"] == ["Tra bảng 2 tiêu chuẩn TCVN", "Lấy giá trị tại 20°C"]
+    assert bool(re.match(ISO_8601_REGEX, msg["created_at"]))
 
 
 def test_list_sessions(store):

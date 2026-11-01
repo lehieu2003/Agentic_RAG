@@ -28,7 +28,7 @@ class SessionStore:
 
         Configures foreign key support, row factory, and handles commit/rollback.
         """
-        conn = sqlite3.connect(self.db_path)
+        conn = sqlite3.connect(self.db_path, timeout=30.0)
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA foreign_keys = ON;")
         try:
@@ -52,8 +52,8 @@ class SessionStore:
                 CREATE TABLE IF NOT EXISTS sessions (
                     id TEXT PRIMARY KEY,
                     title TEXT NOT NULL,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    created_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+                    updated_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
                 );
 
                 CREATE TABLE IF NOT EXISTS messages (
@@ -64,7 +64,7 @@ class SessionStore:
                     standalone_question TEXT,
                     citations_json TEXT,
                     reasoning_steps_json TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    created_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
                     FOREIGN KEY(session_id) REFERENCES sessions(id) ON DELETE CASCADE
                 );
 
@@ -92,10 +92,10 @@ class SessionStore:
             conn.execute(
                 """
                 INSERT INTO sessions (id, title, created_at, updated_at)
-                VALUES (?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                VALUES (?, ?, (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')), (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')))
                 ON CONFLICT(id) DO UPDATE SET
                     title = excluded.title,
-                    updated_at = CURRENT_TIMESTAMP;
+                    updated_at = (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'));
                 """,
                 (sid, session_title),
             )
@@ -215,7 +215,7 @@ class SessionStore:
             conn.execute(
                 """
                 INSERT OR IGNORE INTO sessions (id, title, created_at, updated_at)
-                VALUES (?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+                VALUES (?, ?, (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')), (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')));
                 """,
                 (session_id, default_title or "Cuộc trò chuyện mới"),
             )
@@ -227,7 +227,7 @@ class SessionStore:
                     id, session_id, role, content, standalone_question,
                     citations_json, reasoning_steps_json, created_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP);
+                VALUES (?, ?, ?, ?, ?, ?, ?, (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')));
                 """,
                 (
                     msg_id,
@@ -242,7 +242,7 @@ class SessionStore:
 
             # Update session timestamp
             conn.execute(
-                "UPDATE sessions SET updated_at = CURRENT_TIMESTAMP WHERE id = ?;",
+                "UPDATE sessions SET updated_at = (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')) WHERE id = ?;",
                 (session_id,),
             )
 

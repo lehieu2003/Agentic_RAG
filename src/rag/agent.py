@@ -864,6 +864,13 @@ class AgenticRAG:
 
         retrieved = final_state.get("reranked_chunks") or final_state.get("candidate_chunks", [])
 
+        standalone = final_state.get("standalone_question")
+        standalone_to_report = (
+            standalone.strip()
+            if (standalone and standalone.strip() and standalone.strip() != question.strip())
+            else None
+        )
+
         return QAResponse(
             answer=final_state.get("answer", ""),
             citations=final_state.get("citations", []),
@@ -871,5 +878,5 @@ class AgenticRAG:
             retrieved_chunks=retrieved,
             rewritten_queries=all_queries,
             reasoning_steps=final_state.get("reasoning_steps", []),
-            standalone_question=final_state.get("standalone_question", question),
+            standalone_question=standalone_to_report,
         )

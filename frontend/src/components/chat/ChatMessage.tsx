@@ -53,14 +53,11 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
         {/* Message Content Container */}
         <div className="flex-1 min-w-0">
           {/* Standalone Question Badge (if reformulated) */}
-          {message.standalone_question &&
-            message.standalone_question.trim() !== message.content.trim() && (
-              <div className="mb-2.5 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-obsidian-subtle/80 border border-obsidian-border text-obsidian-accent-blue text-xs font-medium max-w-full">
-                <span className="break-words">
-                  🔍 Đã hiểu ngữ cảnh: &quot;{message.standalone_question}&quot;
-                </span>
-              </div>
-            )}
+          {Boolean(message.standalone_question) && (
+            <div className="mb-2.5 inline-flex items-center gap-1.5 rounded-full border border-obsidian-accent-blue/30 bg-obsidian-accent-blue/10 px-2.5 py-1 text-xs text-obsidian-accent-blue">
+              <span>🔍 Đã hiểu ngữ cảnh: &quot;{message.standalone_question}&quot;</span>
+            </div>
+          )}
 
           {/* Reasoning Steps (if available) */}
           {hasReasoning && (
