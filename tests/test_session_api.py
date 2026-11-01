@@ -109,10 +109,8 @@ def test_query_with_explicit_new_session_id(client):
 def test_list_sessions_with_limit_param(client):
     # Create multiple sessions
     for i in range(3):
-        client.post(
-            "/api/v1/query",
-            json={"question": f"Câu hỏi {i}", "top_k": 1, "session_id": f"sess-limit-{i}"},
-        )
+        app.state.session_store.create_session(f"sess-limit-{i}")
+        app.state.session_store.add_message(f"sess-limit-{i}", "user", f"Câu hỏi {i}")
 
     res_all = client.get("/api/v1/sessions?limit=2")
     assert res_all.status_code == 200
@@ -121,8 +119,8 @@ def test_list_sessions_with_limit_param(client):
 
 
 def test_delete_all_sessions_api(client):
-    client.post("/api/v1/query", json={"question": "Q1", "session_id": "del-all-1"})
-    client.post("/api/v1/query", json={"question": "Q2", "session_id": "del-all-2"})
+    app.state.session_store.create_session("del-all-1")
+    app.state.session_store.create_session("del-all-2")
 
     res = client.delete("/api/v1/sessions")
     assert res.status_code == 200
@@ -136,9 +134,9 @@ def test_delete_all_sessions_api(client):
 
 
 def test_batch_delete_sessions_api(client):
-    client.post("/api/v1/query", json={"question": "Q1", "session_id": "batch-1"})
-    client.post("/api/v1/query", json={"question": "Q2", "session_id": "batch-2"})
-    client.post("/api/v1/query", json={"question": "Q3", "session_id": "batch-3"})
+    app.state.session_store.create_session("batch-1")
+    app.state.session_store.create_session("batch-2")
+    app.state.session_store.create_session("batch-3")
 
     res = client.post(
         "/api/v1/sessions/batch-delete",

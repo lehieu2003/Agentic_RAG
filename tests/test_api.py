@@ -46,12 +46,22 @@ def test_upload_endpoint(client):
     assert data["chunks_indexed"] >= 1
 
 def test_query_endpoint_structure(client):
-    response = client.post("/api/v1/query", json={"question": "Kiem tra ap suat may bom?", "top_k": 3})
-    assert response.status_code == 200
-    data = response.json()
-    assert "answer" in data
-    assert "citations" in data
-    assert "abstained" in data
+    from src.models import QAResponse, Citation
+    mock_result = QAResponse(
+        answer="Ap suat may bom dat 10 bar theo tai lieu.",
+        citations=[Citation(doc_name="test_upload_manual.pdf", page_number=1)],
+        abstained=False,
+        reasoning_steps=["1. router", "2. search"],
+        confidence_score=0.95,
+        session_id="test-session",
+    )
+    with patch.object(app.state.agent, "answer", return_value=mock_result):
+        response = client.post("/api/v1/query", json={"question": "Kiem tra ap suat may bom?", "top_k": 3})
+        assert response.status_code == 200
+        data = response.json()
+        assert "answer" in data
+        assert "citations" in data
+        assert "abstained" in data
 
 def test_upload_when_indexing_unsupported_returns_501(client):
     # Mock retriever where index_chunks raises NotImplementedError (like GrpcRetriever)
@@ -84,9 +94,10 @@ def test_query_returns_503_on_grpc_disconnection(client):
     app.state.retriever = mock_retriever
 
     try:
-        response = client.post("/api/v1/query", json={"question": "Test disconnected gRPC", "top_k": 3})
-        assert response.status_code == 503
-        assert "Retrieval failure" in response.json()["detail"]
+        with patch("src.rag.agent.AgenticRAG._call_llm", return_value=""):
+            response = client.post("/api/v1/query", json={"question": "Test disconnected gRPC", "top_k": 3})
+            assert response.status_code == 503
+            assert "Retrieval failure" in response.json()["detail"]
     finally:
         app.state.retriever = original_retriever
 

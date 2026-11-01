@@ -1,5 +1,6 @@
 """Tests for AgenticRAG: Query expansion, multi-query retrieval, self-correction, and citation grounding."""
 
+import json
 from unittest.mock import MagicMock
 import pytest
 from src.models import Citation, DocumentChunk, RetrievalResult
@@ -195,6 +196,37 @@ def test_agent_chitchat_router_handles_greetings_without_db_query():
     mock_retriever.search.assert_not_called()
 
 
+def test_agent_hybrid_router_llm_intent_classification():
+    """Verify that when regex does not match, LLM intent classifier fallback detects chitchat vs technical query."""
+    mock_retriever = MagicMock(spec=BaseRetriever)
+    mock_llm = MagicMock()
+
+    # 1. Non-regex chitchat query recognized by LLM
+    mock_llm.models.generate_content.return_value.text = json.dumps({
+        "intent": "CHITCHAT",
+        "reply": "I am an intelligent document assistant designed to help engineering teams."
+    })
+    agent = AgenticRAG(retriever=mock_retriever, llm_client=mock_llm, provider="gemini")
+
+    novel_query = "Could you elaborate on the functionalities you provide to engineers?"
+    resp = agent.answer(novel_query)
+
+    assert resp.abstained is False
+    assert "intelligent document assistant" in resp.answer
+    assert len(resp.citations) == 0
+    assert any("LLM" in step and "Router" in step for step in resp.reasoning_steps)
+    mock_retriever.search.assert_not_called()
+
+    # 2. Technical query correctly classified by LLM
+    mock_llm.models.generate_content.return_value.text = json.dumps({
+        "intent": "TECHNICAL_QUERY",
+        "reply": None
+    })
+    router_state = agent._node_router({"question": "Cho biết công suất động cơ máy bơm"})
+    assert router_state["is_chitchat"] is False
+    assert router_state["clean_question"] == "Cho biết công suất động cơ máy bơm"
+
+
 def test_agent_expand_query_includes_unaccented_vietnamese():
     """Verify that query expansion adds unaccented Vietnamese variation for OCR tolerance."""
     mock_retriever = MagicMock(spec=BaseRetriever)
@@ -247,7 +279,9 @@ def test_relevance_and_sufficiency_grader_triggers_rewrite_when_insufficient():
 
     def mock_generate_content(model: str, contents: str):
         mock_resp = MagicMock()
-        if "đánh giá ngữ cảnh" in contents.lower() or "sufficiency" in contents.lower():
+        if "phân loại ý định" in contents.lower() or "intent" in contents.lower():
+            mock_resp.text = '{"intent": "TECHNICAL_QUERY", "reply": null}'
+        elif "đánh giá ngữ cảnh" in contents.lower() or "sufficiency" in contents.lower():
             call_counts["grade"] += 1
             if call_counts["grade"] == 1:
                 mock_resp.text = '{"is_sufficient": false, "missing_aspects": "thiếu cấu tạo trục và cánh"}'
@@ -319,7 +353,9 @@ def test_citation_self_correction_loop_regenerates_with_feedback():
 
     def mock_generate_content(model: str, contents: str):
         mock_resp = MagicMock()
-        if "đánh giá ngữ cảnh" in contents.lower() or "sufficiency" in contents.lower():
+        if "phân loại ý định" in contents.lower() or "intent" in contents.lower():
+            mock_resp.text = '{"intent": "TECHNICAL_QUERY", "reply": null}'
+        elif "đánh giá ngữ cảnh" in contents.lower() or "sufficiency" in contents.lower():
             mock_resp.text = '{"is_sufficient": true, "missing_aspects": ""}'
         elif "biến thể tìm kiếm" in contents.lower():
             mock_resp.text = "áp suất máy bơm\npump pressure"
@@ -356,7 +392,9 @@ def test_abstention_when_retries_exhausted_or_invalid_citations_persist():
 
     def mock_generate_content(model: str, contents: str):
         mock_resp = MagicMock()
-        if "đánh giá ngữ cảnh" in contents.lower() or "sufficiency" in contents.lower():
+        if "phân loại ý định" in contents.lower() or "intent" in contents.lower():
+            mock_resp.text = '{"intent": "TECHNICAL_QUERY", "reply": null}'
+        elif "đánh giá ngữ cảnh" in contents.lower() or "sufficiency" in contents.lower():
             mock_resp.text = '{"is_sufficient": true, "missing_aspects": ""}'
         elif "biến thể tìm kiếm" in contents.lower():
             mock_resp.text = "áp suất máy bơm"

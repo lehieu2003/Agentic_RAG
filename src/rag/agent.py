@@ -219,13 +219,58 @@ class AgenticRAG:
         return ""
 
     def _detect_chitchat(self, text: str) -> Optional[str]:
-        """Detect if user query is a greeting, introduction, thanks, or chitchat."""
+        """Detect if user query is a greeting, introduction, thanks, or chitchat using fast-path regex."""
         clean = text.strip().lower()
         clean_unaccented = self._remove_accents(clean)
         for pattern, reply in self.CHITCHAT_PATTERNS:
             if re.match(pattern, clean, re.IGNORECASE) or re.match(pattern, clean_unaccented, re.IGNORECASE):
                 return reply
         return None
+
+    def _classify_intent_with_llm(self, question: str) -> Optional[str]:
+        """Classify user intent using LLM when fast-path regex patterns do not match.
+
+        Returns chitchat reply string if intent is CHITCHAT, else None if technical query.
+        """
+        if self.llm_client is None:
+            return None
+
+        prompt = (
+            "Bạn là bộ phân loại ý định (Intent Classifier) cho Trợ lý Hỏi đáp Tài liệu Kỹ thuật (Document Q&A Assistant).\n"
+            "Hãy phân tích câu hỏi/yêu cầu sau của người dùng và xác định xem người dùng muốn:\n"
+            "1. 'CHITCHAT': Chào hỏi, cảm ơn, khen ngợi, hỏi bạn là ai, hỏi bot có thể làm gì, cách sử dụng trợ lý, năng lực của hệ thống, hoặc câu hỏi giao tiếp xã giao không cần đọc tài liệu kỹ thuật.\n"
+            "2. 'TECHNICAL_QUERY': Câu hỏi tra cứu dữ liệu, tiêu chuẩn kỹ thuật (ISO, TCVN), thông số, quy trình, công thức tính toán hoặc yêu cầu giải bài toán kỹ thuật từ tài liệu.\n\n"
+            f"Câu hỏi của người dùng: \"{question}\"\n\n"
+            "Trả về DUY NHẤT một chuỗi JSON hợp lệ không bọc trong markdown code blocks, theo định dạng:\n"
+            "{\"intent\": \"CHITCHAT\" hoặc \"TECHNICAL_QUERY\", \"reply\": \"<Nếu là CHITCHAT, hãy trả lời ngắn gọn, lịch sự, chuyên nghiệp bằng đúng ngôn ngữ của người dùng (Anh/Việt) giới thiệu năng lực hỗ trợ tài liệu kỹ thuật. Nếu là TECHNICAL_QUERY thì để null>\"}"
+        )
+
+        try:
+            raw = self._call_llm(prompt)
+            if not raw:
+                return None
+
+            clean_json = re.sub(r"^```(?:json)?\s*", "", raw.strip(), flags=re.IGNORECASE)
+            clean_json = re.sub(r"\s*```$", "", clean_json)
+            start = clean_json.find("{")
+            end = clean_json.rfind("}")
+            if start != -1 and end != -1:
+                clean_json = clean_json[start : end + 1]
+
+            data = json.loads(clean_json)
+            intent = str(data.get("intent", "")).upper()
+            if intent == "CHITCHAT":
+                reply = data.get("reply")
+                if reply and isinstance(reply, str) and len(reply.strip()) > 5:
+                    return reply.strip()
+                return (
+                    "Tôi là Trợ lý AI Hỏi đáp Kỹ thuật chuyên sâu. Tôi có thể giúp bạn tra cứu, "
+                    "giải đáp thông số, quy trình và cung cấp trích dẫn chính xác từ các tài liệu bạn tải lên."
+                )
+            return None
+        except Exception as e:
+            logger.warning(f"LLM intent classification failed: {e}")
+            return None
 
     def expand_query(self, question: str) -> List[str]:
         """Generate search query variations for technical document retrieval."""
@@ -404,8 +449,8 @@ class AgenticRAG:
         history = state.get("history") or []
         steps = list(state.get("reasoning_steps", []))
 
-        # Fast path: bypass LLM if history is empty
-        if not history:
+        # Fast path: bypass LLM if history is empty or if query is chitchat
+        if not history or self._detect_chitchat(raw_question):
             return {
                 "standalone_question": raw_question,
                 "reasoning_steps": steps,
@@ -478,7 +523,23 @@ class AgenticRAG:
                 "candidate_chunks": [],
                 "reranked_chunks": [],
                 "all_queries": [clean_q],
-                "reasoning_steps": list(state.get("reasoning_steps", [])) + ["1. router: Nhận diện câu hỏi là lời chào hỏi / giao tiếp thông thường (Chit-chat Router)"]
+                "reasoning_steps": list(state.get("reasoning_steps", [])) + ["1. router: Nhận diện câu hỏi là lời chào hỏi / giao tiếp thông thường (Fast-path Router)"]
+            }
+
+        # 3. Tier 2: LLM Intent Classifier fallback for novel / conversational phrasing
+        llm_reply = self._classify_intent_with_llm(clean_q)
+        if llm_reply:
+            return {
+                "clean_question": clean_q,
+                "is_chitchat": True,
+                "chitchat_reply": llm_reply,
+                "answer": llm_reply,
+                "abstained": False,
+                "citations": [],
+                "candidate_chunks": [],
+                "reranked_chunks": [],
+                "all_queries": [clean_q],
+                "reasoning_steps": list(state.get("reasoning_steps", [])) + ["1. router: Mô hình LLM nhận diện câu hỏi là hội thoại thông thường / hỏi năng lực trợ lý (LLM Intent Router)"]
             }
 
         steps = list(state.get("reasoning_steps", []))
