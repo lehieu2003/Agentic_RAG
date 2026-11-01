@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
@@ -30,8 +30,17 @@ interface CodeBlockProps {
 
 const CodeBlock: React.FC<CodeBlockProps> = ({ className, children }) => {
   const [copied, setCopied] = useState(false);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isInline = !className || !className.includes('language-');
   const language = className ? className.replace('language-', '') : '';
+
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+    };
+  }, []);
 
   if (isInline) {
     return (
@@ -47,7 +56,10 @@ const CodeBlock: React.FC<CodeBlockProps> = ({ className, children }) => {
       if (navigator?.clipboard?.writeText) {
         await navigator.clipboard.writeText(textToCopy);
         setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
+        if (timeoutRef.current) {
+          clearTimeout(timeoutRef.current);
+        }
+        timeoutRef.current = setTimeout(() => setCopied(false), 2000);
       }
     } catch {
       // Ignore clipboard write failures in restricted environments

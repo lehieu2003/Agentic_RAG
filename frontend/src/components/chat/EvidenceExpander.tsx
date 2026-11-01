@@ -76,9 +76,20 @@ export const EvidenceExpander: React.FC<EvidenceExpanderProps> = ({
                 <div className="flex items-center justify-between gap-2 flex-wrap">
                   <div className="flex items-center gap-1.5 flex-wrap">
                     <FileText className="w-3.5 h-3.5 text-sky-400 shrink-0" />
-                    <span className="font-mono font-medium text-zinc-200 text-[11.5px] truncate max-w-[200px] sm:max-w-[280px]">
-                      {filename}
-                    </span>
+                    {onCitationClick ? (
+                      <button
+                        type="button"
+                        onClick={() => onCitationClick(filename, page)}
+                        title={`Mở ${filename}${page !== undefined ? ` trang ${page}` : ''}`}
+                        className="font-mono font-medium text-zinc-200 hover:text-sky-300 hover:underline text-[11.5px] truncate max-w-[200px] sm:max-w-[280px] text-left transition-colors"
+                      >
+                        {filename}
+                      </button>
+                    ) : (
+                      <span className="font-mono font-medium text-zinc-200 text-[11.5px] truncate max-w-[200px] sm:max-w-[280px]">
+                        {filename}
+                      </span>
+                    )}
                     {page !== undefined && (
                       <span className="bg-white/[0.04] border border-white/[0.08] text-sky-400 text-[10px] font-mono px-2 py-0.5 rounded">
                         Trang {page}

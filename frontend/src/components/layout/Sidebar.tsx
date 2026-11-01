@@ -189,8 +189,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
 
         {/* Segmented Tabs Control */}
-        <div className="bg-zinc-900/90 border border-white/[0.08] p-1 rounded-xl flex gap-1 mx-3 my-2 shrink-0">
+        <div
+          role="tablist"
+          aria-label="Chuyển đổi danh mục"
+          className="bg-zinc-900/90 border border-white/[0.08] p-1 rounded-xl flex gap-1 mx-3 my-2 shrink-0"
+        >
           <button
+            id="tab-chats"
             type="button"
             onClick={() => setActiveTab('chats')}
             className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg text-xs transition-all ${
@@ -200,11 +205,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
             }`}
             role="tab"
             aria-selected={activeTab === 'chats'}
+            aria-controls="panel-chats"
           >
             <MessageSquare className="w-3.5 h-3.5" />
             <span>Cuộc trò chuyện</span>
           </button>
           <button
+            id="tab-documents"
             type="button"
             onClick={() => setActiveTab('documents')}
             className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg text-xs transition-all ${
@@ -214,6 +221,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             }`}
             role="tab"
             aria-selected={activeTab === 'documents'}
+            aria-controls="panel-documents"
           >
             <Files className="w-3.5 h-3.5" />
             <span>Tài liệu</span>
@@ -242,7 +250,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
         )}
 
         {/* Chats Tab Content */}
-        <div className={activeTab === 'chats' ? 'flex flex-col flex-1 min-h-0' : 'hidden'}>
+        <div
+          id="panel-chats"
+          role="tabpanel"
+          aria-labelledby="tab-chats"
+          className={activeTab === 'chats' ? 'flex flex-col flex-1 min-h-0' : 'hidden'}
+        >
           {/* New Chat Button */}
           <div className="p-3 border-b border-white/[0.06] shrink-0">
             <button
@@ -339,7 +352,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
 
         {/* Documents Tab Content */}
-        <div className={activeTab === 'documents' ? 'flex flex-col flex-1 min-h-0' : 'hidden'}>
+        <div
+          id="panel-documents"
+          role="tabpanel"
+          aria-labelledby="tab-documents"
+          className={activeTab === 'documents' ? 'flex flex-col flex-1 min-h-0' : 'hidden'}
+        >
           {/* TopK slider section */}
           <div className="p-3 border-b border-white/[0.06] space-y-2 bg-zinc-900/40 shrink-0">
             <div className="flex items-center justify-between text-xs">
