@@ -1,6 +1,7 @@
-"""LangGraph-powered Agentic RAG Engine with Query Expansion, Hybrid Retrieval, Cross-Encoder Reranking, Grader, and Citation Self-Correction."""
+"""LangGraph-powered Agentic RAG Engine with Query Contextualizer, Query Expansion, Hybrid Retrieval, Cross-Encoder Reranking, Grader, and Citation Self-Correction."""
 
 import json
+import logging
 import re
 import unicodedata
 from typing import Any, Dict, List, Optional, TypedDict
@@ -9,17 +10,21 @@ from langgraph.graph import StateGraph, START, END
 from src.config import settings
 from src.models import Citation, DocumentChunk, QAResponse, RetrievalResult
 from src.rag.generator import RAGGenerator
-from src.rag.prompt import ABSTAIN_PHRASE, build_rag_prompt
+from src.rag.prompt import ABSTAIN_PHRASE, CONTEXTUALIZE_QUERY_PROMPT, build_rag_prompt
 from src.retrieval.base import BaseRetriever
 from src.retrieval.reranker import CrossEncoderReranker
+
+logger = logging.getLogger(__name__)
 
 
 class AgentState(TypedDict, total=False):
     """Execution state passed between nodes in the Agentic RAG v2 graph."""
 
-    # Input queries
+    # Input queries & conversation context
     question: str                         # Raw user query
     clean_question: str                   # Cleaned query after removing greeting prefixes
+    history: List[Dict[str, str]]         # Prior conversation messages
+    standalone_question: str              # Contextualized / standalone query
     is_chitchat: bool                     # True if query is purely social/greeting
     chitchat_reply: Optional[str]         # Canned friendly response for greetings
 
@@ -167,6 +172,13 @@ class AgenticRAG:
                 return response.choices[0].message.content or ""
             except Exception:
                 return ""
+        elif self.provider == "mock" or (hasattr(self.llm_client, "generate") and callable(self.llm_client.generate)):
+            try:
+                res = self.llm_client.generate(prompt)
+                return str(res) if res is not None else ""
+            except Exception as e:
+                logger.warning(f"Mock LLM call failed: {e}")
+                return ""
         return ""
 
     def _detect_chitchat(self, text: str) -> Optional[str]:
@@ -272,12 +284,19 @@ class AgenticRAG:
         for q in queries:
             if not q or not q.strip():
                 continue
+            results = []
             if hasattr(self.retriever, "search") and callable(self.retriever.search):
-                results = self.retriever.search(q, top_k=fetch_k)
-            elif hasattr(self.retriever, "retrieve") and callable(self.retriever.retrieve):
-                results = self.retriever.retrieve(q, top_k=fetch_k)
-            else:
-                results = []
+                res = self.retriever.search(q, top_k=fetch_k)
+                if isinstance(res, list):
+                    results = res
+            if not results and hasattr(self.retriever, "retrieve") and callable(self.retriever.retrieve):
+                res = self.retriever.retrieve(q, top_k=fetch_k)
+                if isinstance(res, list):
+                    results = res
+            if not results and hasattr(self.retriever, "hybrid_search") and callable(self.retriever.hybrid_search):
+                res = self.retriever.hybrid_search(q, top_k=fetch_k)
+                if isinstance(res, list):
+                    results = res
 
             for r in results[:top_k]:
                 key = self._get_chunk_key(r.chunk)
@@ -339,18 +358,61 @@ class AgenticRAG:
         return self.generator.parse_llm_output(raw_output, retrieved_chunks)
 
     # -------------------------------------------------------------------------
-    # LangGraph Nodes & Conditional Edges (8+1 Numbered Nodes)
+    # LangGraph Nodes & Conditional Edges (9+1 Numbered Nodes)
     # -------------------------------------------------------------------------
+
+    def _node_contextualize_query(self, state: AgentState) -> Dict[str, Any]:
+        """Node 0: Contextualize user question with conversation history into standalone query."""
+        raw_question = state.get("question", "").strip()
+        history = state.get("history") or []
+        steps = list(state.get("reasoning_steps", []))
+
+        # Fast path: bypass LLM if history is empty
+        if not history:
+            return {
+                "standalone_question": raw_question,
+                "reasoning_steps": steps,
+            }
+
+        # Build formatted history lines
+        history_lines = []
+        for msg in history:
+            role = msg.get("role", "user")
+            label = "Người dùng" if role == "user" else "Trợ lý"
+            content = msg.get("content", "").strip()
+            history_lines.append(f"{label}: {content}")
+        history_text = "\n".join(history_lines)
+
+        prompt = CONTEXTUALIZE_QUERY_PROMPT.format(
+            history=history_text,
+            question=raw_question,
+        )
+
+        try:
+            standalone_q = self._call_llm(prompt).strip()
+            if standalone_q:
+                standalone_q = re.sub(r'^["\']|["\']$', '', standalone_q).strip()
+            if not standalone_q:
+                standalone_q = raw_question
+        except Exception as e:
+            logger.warning(f"Error during query contextualization: {e}. Falling back to raw query.")
+            standalone_q = raw_question
+
+        steps.append(f"0. contextualize: Đã chuẩn hóa câu hỏi theo ngữ cảnh: {standalone_q}")
+        return {
+            "standalone_question": standalone_q,
+            "reasoning_steps": steps,
+        }
 
     def _node_router(self, state: AgentState) -> Dict[str, Any]:
         """Node 1: Smart Chit-chat & Intent Extractor."""
-        raw_question = state["question"].strip()
+        target_q = state.get("standalone_question", state.get("question", "")).strip()
 
         # 1. Pure chitchat check on full query
-        reply = self._detect_chitchat(raw_question)
+        reply = self._detect_chitchat(target_q)
         if reply:
             return {
-                "clean_question": raw_question,
+                "clean_question": target_q,
                 "is_chitchat": True,
                 "chitchat_reply": reply,
                 "answer": reply,
@@ -358,14 +420,14 @@ class AgenticRAG:
                 "citations": [],
                 "candidate_chunks": [],
                 "reranked_chunks": [],
-                "all_queries": [raw_question],
-                "reasoning_steps": ["1. router: Nhận diện câu hỏi là lời chào hỏi / giao tiếp thông thường (Chit-chat Router)"]
+                "all_queries": [target_q],
+                "reasoning_steps": list(state.get("reasoning_steps", [])) + ["1. router: Nhận diện câu hỏi là lời chào hỏi / giao tiếp thông thường (Chit-chat Router)"]
             }
 
         # 2. Greeting prefix stripping for mixed-intent queries
-        clean_q = self.GREETING_PREFIX_PATTERN.sub("", raw_question).strip()
+        clean_q = self.GREETING_PREFIX_PATTERN.sub("", target_q).strip()
         if not clean_q:
-            clean_q = raw_question
+            clean_q = target_q
 
         reply_stripped = self._detect_chitchat(clean_q)
         if reply_stripped:
@@ -379,13 +441,15 @@ class AgenticRAG:
                 "candidate_chunks": [],
                 "reranked_chunks": [],
                 "all_queries": [clean_q],
-                "reasoning_steps": ["1. router: Nhận diện câu hỏi là lời chào hỏi / giao tiếp thông thường (Chit-chat Router)"]
+                "reasoning_steps": list(state.get("reasoning_steps", [])) + ["1. router: Nhận diện câu hỏi là lời chào hỏi / giao tiếp thông thường (Chit-chat Router)"]
             }
 
+        steps = list(state.get("reasoning_steps", []))
+        steps.append(f"1. router: Đã chuẩn hóa câu hỏi: '{clean_q}' (loại bỏ lời chào hỏi nếu có)")
         return {
             "clean_question": clean_q,
             "is_chitchat": False,
-            "reasoning_steps": [f"1. router: Đã chuẩn hóa câu hỏi: '{clean_q}' (loại bỏ lời chào hỏi nếu có)"]
+            "reasoning_steps": steps
         }
 
     def _route_after_router(self, state: AgentState) -> str:
@@ -574,9 +638,10 @@ class AgenticRAG:
 
     def _node_generate(self, state: AgentState) -> Dict[str, Any]:
         """Node 7: Grounded answer synthesis."""
-        clean_q = state.get("clean_question", state["question"])
+        clean_q = state.get("clean_question", state.get("standalone_question", state["question"]))
         context_chunks = state.get("reranked_chunks") or state.get("candidate_chunks", [])
         citation_feedback = state.get("citation_feedback")
+        history = state.get("history")
         steps = list(state.get("reasoning_steps", []))
 
         steps.append(f"7. generate: Tổng hợp câu trả lời từ {len(context_chunks)} đoạn tài liệu phù hợp")
@@ -591,8 +656,12 @@ class AgenticRAG:
             steps.append(f"7. generate: Áp dụng chỉ thị điều chỉnh trích dẫn: {citation_feedback}")
 
         if self.llm_client is not None:
-            prompt = build_rag_prompt(effective_question, context_chunks)
-            raw_output = self._call_llm(prompt)
+            prompt = build_rag_prompt(effective_question, context_chunks, history=history)
+            try:
+                raw_output = self._call_llm(prompt)
+            except Exception as e:
+                logger.warning(f"LLM generation failed: {e}")
+                raw_output = ABSTAIN_PHRASE
             if not raw_output:
                 raw_output = ABSTAIN_PHRASE
         else:
@@ -681,9 +750,10 @@ class AgenticRAG:
         }
 
     def _build_graph(self):
-        """Construct and compile the 8+1 numbered node LangGraph StateGraph workflow."""
+        """Construct and compile the 9+1 numbered node LangGraph StateGraph workflow."""
         workflow = StateGraph(AgentState)
 
+        workflow.add_node("0_contextualize_query", self._node_contextualize_query)
         workflow.add_node("1_router", self._node_router)
         workflow.add_node("2_expand_query", self._node_expand_query)
         workflow.add_node("3_hybrid_retrieve", self._node_hybrid_retrieve)
@@ -694,7 +764,8 @@ class AgenticRAG:
         workflow.add_node("8_validate_citations", self._node_validate_citations)
         workflow.add_node("9_abstain", self._node_abstain)
 
-        workflow.add_edge(START, "1_router")
+        workflow.add_edge(START, "0_contextualize_query")
+        workflow.add_edge("0_contextualize_query", "1_router")
         workflow.add_conditional_edges(
             "1_router",
             self._route_after_router,
@@ -755,11 +826,18 @@ class AgenticRAG:
 
         return png_bytes
 
-    def answer(self, question: str, top_k: int = 5) -> QAResponse:
+    def answer(
+        self,
+        question: str,
+        top_k: int = 5,
+        history: Optional[List[Dict[str, str]]] = None,
+    ) -> QAResponse:
         """Execute the LangGraph workflow and return a structured QAResponse."""
         initial_state: AgentState = {
             "question": question,
             "clean_question": question,
+            "standalone_question": question,
+            "history": history or [],
             "top_k": top_k,
             "is_chitchat": False,
             "chitchat_reply": None,
@@ -782,7 +860,7 @@ class AgenticRAG:
 
         all_queries = list(final_state.get("all_queries", []))
         if not all_queries:
-            all_queries = [question]
+            all_queries = [final_state.get("standalone_question", question)]
 
         retrieved = final_state.get("reranked_chunks") or final_state.get("candidate_chunks", [])
 
@@ -792,5 +870,6 @@ class AgenticRAG:
             abstained=final_state.get("abstained", False),
             retrieved_chunks=retrieved,
             rewritten_queries=all_queries,
-            reasoning_steps=final_state.get("reasoning_steps", [])
+            reasoning_steps=final_state.get("reasoning_steps", []),
+            standalone_question=final_state.get("standalone_question", question),
         )

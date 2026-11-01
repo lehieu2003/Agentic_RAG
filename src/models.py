@@ -86,4 +86,5 @@ class QAResponse(BaseModel):
     retrieved_chunks: List[RetrievalResult] = Field(default_factory=list)
     rewritten_queries: Optional[List[str]] = None
     reasoning_steps: Optional[List[str]] = None
+    standalone_question: Optional[str] = None
 
