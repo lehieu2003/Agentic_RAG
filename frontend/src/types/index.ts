@@ -86,4 +86,5 @@ export interface ChatMessageData {
   evidence?: EvidenceChunk[];
   reasoning_steps?: ReasoningStep[];
   timestamp?: number;
+  isError?: boolean;
 }

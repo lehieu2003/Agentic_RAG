@@ -3,7 +3,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import remarkGfm from 'remark-gfm';
-import { Sparkles, User, FileText } from 'lucide-react';
+import { Sparkles, User, FileText, RotateCcw } from 'lucide-react';
 import type { ChatMessageData } from '../../types';
 import CitationBadge from './CitationBadge';
 import ReasoningSteps from './ReasoningSteps';
@@ -12,12 +12,14 @@ import EvidenceExpander from './EvidenceExpander';
 export interface ChatMessageProps {
   message: ChatMessageData;
   onCitationClick: (filename: string, page?: number) => void;
+  onRetry?: () => void;
   className?: string;
 }
 
 export const ChatMessage: React.FC<ChatMessageProps> = ({
   message,
   onCitationClick,
+  onRetry,
   className = '',
 }) => {
   const isUser = message.role === 'user';
@@ -139,6 +141,20 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
               evidence={message.evidence}
               onCitationClick={onCitationClick}
             />
+          )}
+
+          {/* Retry Button on Error */}
+          {message.isError && onRetry && (
+            <div className="mt-3">
+              <button
+                type="button"
+                onClick={onRetry}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30 text-xs font-medium transition-colors cursor-pointer"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>Thử lại</span>
+              </button>
+            </div>
           )}
         </div>
       </div>
