@@ -1,0 +1,124 @@
+/**
+ * Typed API client service connecting React frontend to FastAPI backend.
+ */
+
+import type {
+  HealthResponse,
+  FileInfo,
+  FileUploadResponse,
+  QAResponse,
+  Citation,
+} from '../types';
+
+const API_BASE = '/api/v1';
+
+/**
+ * Common response handler with error extraction.
+ */
+async function handleResponse<T>(res: Response): Promise<T> {
+  if (!res.ok) {
+    let errorMsg = res.statusText;
+    if (typeof res.json === 'function') {
+      try {
+        const body = await res.json();
+        if (body?.detail) {
+          errorMsg = typeof body.detail === 'string' ? body.detail : JSON.stringify(body.detail);
+        } else if (body?.message) {
+          errorMsg = body.message;
+        }
+      } catch {
+        // Fallback to statusText on JSON parse error
+      }
+    }
+    throw new Error(errorMsg || `Request failed with status ${res.status}`);
+  }
+  return res.json() as Promise<T>;
+}
+
+/**
+ * Check backend service and vector store status.
+ */
+export async function checkHealth(): Promise<HealthResponse> {
+  const res = await fetch(`${API_BASE}/health`);
+  return handleResponse<HealthResponse>(res);
+}
+
+/**
+ * Retrieve list of indexed documents.
+ * Normalizes array or wrapped `{ files: [...] }` responses.
+ */
+export async function getFiles(): Promise<FileInfo[]> {
+  const res = await fetch(`${API_BASE}/files`);
+  const data = await handleResponse<any>(res);
+  const list: any[] = Array.isArray(data) ? data : (data.files || []);
+  return list.map((item) => ({
+    ...item,
+    filename: item.filename,
+    size: item.size ?? item.size_bytes ?? 0,
+    size_bytes: item.size_bytes ?? item.size ?? 0,
+  }));
+}
+
+/**
+ * Upload a document file for OCR extraction and vector store indexing.
+ */
+export async function uploadDocument(file: File): Promise<FileUploadResponse> {
+  const formData = new FormData();
+  formData.append('file', file);
+  const res = await fetch(`${API_BASE}/upload`, {
+    method: 'POST',
+    body: formData,
+  });
+  return handleResponse<FileUploadResponse>(res);
+}
+
+/**
+ * Delete a document from vector index and physical disk.
+ */
+export async function deleteDocument(
+  filename: string
+): Promise<{ status: string; message?: string; [key: string]: any }> {
+  const res = await fetch(`${API_BASE}/files/${encodeURIComponent(filename)}`, {
+    method: 'DELETE',
+  });
+  return handleResponse(res);
+}
+
+/**
+ * Query the assistant with a natural language question.
+ */
+export async function askQuestion(
+  question: string,
+  topK: number = 8
+): Promise<QAResponse> {
+  const res = await fetch(`${API_BASE}/query`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ question, top_k: topK }),
+  });
+
+  const data = await handleResponse<QAResponse>(res);
+  const citations: Citation[] = (data.citations || []).map((c) => ({
+    ...c,
+    filename: c.filename ?? c.doc_name ?? '',
+    doc_name: c.doc_name ?? c.filename ?? '',
+    page: c.page ?? c.page_number,
+    page_number: c.page_number ?? c.page,
+  }));
+
+  return {
+    ...data,
+    citations,
+  };
+}
+
+/**
+ * Build browser streaming URL for a document with page anchor support.
+ */
+export function getDocumentStreamUrl(filename: string, page?: number): string {
+  const encodedName = encodeURIComponent(filename);
+  const pageHash = page ? `#page=${page}` : '';
+  return `${API_BASE}/files/${encodedName}${pageHash}`;
+}
