@@ -1,11 +1,29 @@
 import { useState, useEffect, useCallback } from 'react';
 import { X } from 'lucide-react';
-import type { HealthResponse, FileInfo, ChatMessageData, ReasoningStep } from './types';
-import { checkHealth, getFiles, uploadDocument, deleteDocument, askQuestion } from './api/client';
+import type {
+  HealthResponse,
+  FileInfo,
+  ChatMessageData,
+  ReasoningStep,
+  SessionSummary,
+} from './types';
+import {
+  checkHealth,
+  getFiles,
+  uploadDocument,
+  deleteDocument,
+  askQuestion,
+  listSessions,
+  getSession,
+  deleteSession,
+} from './api/client';
 import Header from './components/layout/Header';
 import Sidebar from './components/layout/Sidebar';
 import ChatContainer from './components/chat/ChatContainer';
 import DocumentViewer, { type ActiveDocument } from './components/viewer/DocumentViewer';
+
+const ACTIVE_SESSION_STORAGE_KEY = 'doc_qa_active_session_id';
+const LEGACY_SESSION_STORAGE_KEY = 'active_session_id';
 
 export function parseReasoningStep(step: ReasoningStep | string): ReasoningStep {
   if (typeof step !== 'string') {
@@ -29,6 +47,8 @@ export function parseReasoningStep(step: ReasoningStep | string): ReasoningStep 
 export default function App() {
   const [health, setHealth] = useState<HealthResponse | null>(null);
   const [files, setFiles] = useState<FileInfo[]>([]);
+  const [sessions, setSessions] = useState<SessionSummary[]>([]);
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [topK, setTopK] = useState<number>(8);
   const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(false);
   const [isViewerOpen, setIsViewerOpen] = useState<boolean>(false);
@@ -39,15 +59,22 @@ export default function App() {
   const [sidebarError, setSidebarError] = useState<string | null>(null);
   const [lastQuestion, setLastQuestion] = useState<string>('');
 
-  // Initial load: check health and indexed files
+  // Initial load: check health, indexed files, and chat sessions
   useEffect(() => {
     let mounted = true;
 
     async function loadInitialData() {
+      // Synchronously capture saved session id on mount before any concurrent user interactions
+      const savedSessionId =
+        localStorage.getItem(ACTIVE_SESSION_STORAGE_KEY) ||
+        localStorage.getItem(LEGACY_SESSION_STORAGE_KEY);
+
       try {
-        const [healthRes, filesRes] = await Promise.allSettled([
+        const [healthRes, filesRes, sessionsRes, sessionDetailRes] = await Promise.allSettled([
           checkHealth(),
           getFiles(),
+          listSessions(),
+          savedSessionId ? getSession(savedSessionId) : Promise.resolve(null),
         ]);
 
         if (!mounted) return;
@@ -60,6 +87,41 @@ export default function App() {
 
         if (filesRes.status === 'fulfilled') {
           setFiles(filesRes.value);
+        }
+
+        if (sessionsRes.status === 'fulfilled') {
+          setSessions(sessionsRes.value);
+        }
+
+        if (savedSessionId) {
+          if (
+            sessionDetailRes.status === 'fulfilled' &&
+            sessionDetailRes.value &&
+            'messages' in sessionDetailRes.value &&
+            Array.isArray(sessionDetailRes.value.messages)
+          ) {
+            setCurrentSessionId(savedSessionId);
+            const loadedMessages: ChatMessageData[] = sessionDetailRes.value.messages.map(
+              (m, idx) => ({
+                id: m.id || `msg-${savedSessionId}-${idx}`,
+                role: m.role,
+                content: m.content,
+                citations: m.citations,
+                reasoning_steps: Array.isArray(m.reasoning_steps)
+                  ? m.reasoning_steps.map(parseReasoningStep)
+                  : undefined,
+                standalone_question: m.standalone_question,
+                timestamp: m.created_at ? new Date(m.created_at).getTime() : Date.now(),
+              })
+            );
+            // Don't overwrite if user has already started chatting while initial data was fetching
+            setMessages((prev) => (prev.length > 0 ? prev : loadedMessages));
+          } else if (sessionDetailRes.status === 'rejected') {
+            console.warn('Could not restore saved session:', sessionDetailRes.reason);
+            localStorage.removeItem(ACTIVE_SESSION_STORAGE_KEY);
+            localStorage.removeItem(LEGACY_SESSION_STORAGE_KEY);
+            setCurrentSessionId(null);
+          }
         }
       } catch {
         if (mounted) {
@@ -76,15 +138,19 @@ export default function App() {
 
   const refreshState = useCallback(async () => {
     try {
-      const [healthData, filesData] = await Promise.allSettled([
+      const [healthData, filesData, sessionsData] = await Promise.allSettled([
         checkHealth(),
         getFiles(),
+        listSessions(),
       ]);
       if (healthData.status === 'fulfilled') {
         setHealth(healthData.value);
       }
       if (filesData.status === 'fulfilled') {
         setFiles(filesData.value);
+      }
+      if (sessionsData.status === 'fulfilled') {
+        setSessions(sessionsData.value);
       }
     } catch {
       // Ignore background refresh errors
@@ -143,7 +209,7 @@ export default function App() {
     setLastQuestion(trimmed);
 
     try {
-      const res = await askQuestion(trimmed, topK);
+      const res = await askQuestion(trimmed, topK, currentSessionId);
       const reasoningSteps: ReasoningStep[] | undefined = Array.isArray(res.reasoning_steps)
         ? res.reasoning_steps.map(parseReasoningStep)
         : undefined;
@@ -155,10 +221,23 @@ export default function App() {
         citations: res.citations,
         evidence: res.evidence,
         reasoning_steps: reasoningSteps,
+        standalone_question: res.standalone_question,
         timestamp: Date.now(),
       };
 
       setMessages((prev) => [...prev, assistantMsg]);
+
+      if (res.session_id) {
+        setCurrentSessionId(res.session_id);
+        localStorage.setItem(ACTIVE_SESSION_STORAGE_KEY, res.session_id);
+      }
+
+      try {
+        const updatedSessions = await listSessions();
+        setSessions(updatedSessions);
+      } catch {
+        // Ignore background refresh errors
+      }
     } catch (err: any) {
       const errorMsg: ChatMessageData = {
         id: `error-${Date.now()}-${Math.random()}`,
@@ -185,7 +264,52 @@ export default function App() {
   };
 
   const handleNewChat = () => {
+    setCurrentSessionId(null);
+    localStorage.removeItem(ACTIVE_SESSION_STORAGE_KEY);
+    localStorage.removeItem(LEGACY_SESSION_STORAGE_KEY);
     setMessages([]);
+  };
+
+  const handleSelectSession = async (sessionId: string) => {
+    setSidebarError(null);
+    try {
+      const sessionDetail = await getSession(sessionId);
+      setCurrentSessionId(sessionId);
+      localStorage.setItem(ACTIVE_SESSION_STORAGE_KEY, sessionId);
+
+      const loadedMessages: ChatMessageData[] = (sessionDetail.messages || []).map((m, idx) => ({
+        id: m.id || `msg-${sessionId}-${idx}`,
+        role: m.role,
+        content: m.content,
+        citations: m.citations,
+        reasoning_steps: Array.isArray(m.reasoning_steps)
+          ? m.reasoning_steps.map(parseReasoningStep)
+          : undefined,
+        standalone_question: m.standalone_question,
+        timestamp: m.created_at ? new Date(m.created_at).getTime() : Date.now(),
+      }));
+      setMessages(loadedMessages);
+    } catch (err: any) {
+      console.error('Failed to load session:', err);
+      const msg = err.response?.data?.detail || err.message || 'Không thể tải cuộc trò chuyện.';
+      setSidebarError(`Lỗi tải cuộc trò chuyện: ${msg}`);
+    }
+  };
+
+  const handleDeleteSession = async (sessionId: string) => {
+    setSidebarError(null);
+    try {
+      await deleteSession(sessionId);
+      if (currentSessionId === sessionId) {
+        handleNewChat();
+      }
+      const updatedSessions = await listSessions();
+      setSessions(updatedSessions);
+    } catch (err: any) {
+      console.error('Failed to delete session:', err);
+      const msg = err.response?.data?.detail || err.message || 'Không thể xóa cuộc trò chuyện.';
+      setSidebarError(`Lỗi xóa cuộc trò chuyện: ${msg}`);
+    }
   };
 
   return (
@@ -211,6 +335,10 @@ export default function App() {
           onNewChat={handleNewChat}
           onFileUpload={handleFileUpload}
           onDeleteFile={handleDeleteFile}
+          sessions={sessions}
+          activeSessionId={currentSessionId}
+          onSelectSession={handleSelectSession}
+          onDeleteSession={handleDeleteSession}
           isUploading={isUploading}
           errorMessage={sidebarError}
           onDismissError={() => setSidebarError(null)}

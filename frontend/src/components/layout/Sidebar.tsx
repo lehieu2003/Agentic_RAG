@@ -9,8 +9,9 @@ import {
   Database,
   SlidersHorizontal,
   AlertCircle,
+  MessageSquare,
 } from 'lucide-react';
-import type { FileInfo } from '../../types';
+import type { FileInfo, SessionSummary } from '../../types';
 
 export interface SidebarProps {
   isOpen: boolean;
@@ -21,6 +22,10 @@ export interface SidebarProps {
   onNewChat: () => void;
   onFileUpload: (file: File) => Promise<void>;
   onDeleteFile: (filename: string) => Promise<void>;
+  sessions?: SessionSummary[];
+  activeSessionId?: string | null;
+  onSelectSession?: (id: string) => void;
+  onDeleteSession?: (id: string) => Promise<void>;
   isUploading?: boolean;
   errorMessage?: string | null;
   onDismissError?: () => void;
@@ -49,6 +54,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onNewChat,
   onFileUpload,
   onDeleteFile,
+  sessions = [],
+  activeSessionId = null,
+  onSelectSession,
+  onDeleteSession,
   isUploading = false,
   errorMessage,
   onDismissError,
@@ -165,6 +174,80 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <Plus className="w-4 h-4 text-emerald-400" />
             <span>Cuộc trò chuyện mới</span>
           </button>
+        </div>
+
+        {/* Recent Chats Section */}
+        <div className="p-3 border-b border-obsidian-border flex flex-col max-h-52">
+          <div className="flex items-center justify-between pb-2">
+            <div className="flex items-center gap-1.5 text-xs font-semibold text-obsidian-text">
+              <MessageSquare className="w-3.5 h-3.5 text-obsidian-text-muted" />
+              <span>Cuộc trò chuyện gần đây</span>
+            </div>
+            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-obsidian-subtle border border-obsidian-border text-obsidian-text-muted">
+              {sessions.length}
+            </span>
+          </div>
+
+          <div className="flex-1 overflow-y-auto space-y-1 pr-0.5">
+            {sessions.length === 0 ? (
+              <p className="text-center py-3 text-xs text-obsidian-text-muted">
+                Chưa có cuộc trò chuyện nào
+              </p>
+            ) : (
+              sessions.map((session) => {
+                const isActive = activeSessionId === session.id;
+                return (
+                  <div
+                    key={session.id}
+                    onClick={() => onSelectSession?.(session.id)}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        onSelectSession?.(session.id);
+                      }
+                    }}
+                    className={`flex items-center justify-between p-2 rounded-lg border text-xs cursor-pointer transition-colors group ${
+                      isActive
+                        ? 'bg-obsidian-subtle border-obsidian-accent-blue/50 text-white font-medium'
+                        : 'bg-obsidian-bg/40 hover:bg-obsidian-subtle/50 border-obsidian-border/50 text-obsidian-text hover:text-white'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 min-w-0 pr-2">
+                      <MessageSquare
+                        className={`w-3.5 h-3.5 shrink-0 ${
+                          isActive
+                            ? 'text-obsidian-accent-blue'
+                            : 'text-obsidian-text-muted group-hover:text-obsidian-text'
+                        }`}
+                      />
+                      <span className="truncate" title={session.title}>
+                        {session.title || 'Cuộc trò chuyện'}
+                      </span>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const confirmed = window.confirm(
+                          'Bạn có chắc chắn muốn xóa cuộc trò chuyện này không?'
+                        );
+                        if (confirmed) {
+                          onDeleteSession?.(session.id);
+                        }
+                      }}
+                      aria-label="Xóa cuộc trò chuyện"
+                      title="Xóa cuộc trò chuyện"
+                      className="p-1 rounded text-obsidian-text-muted hover:text-rose-400 hover:bg-rose-950/40 transition-colors shrink-0 opacity-80 md:opacity-0 md:group-hover:opacity-100 md:focus:opacity-100"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                );
+              })
+            )}
+          </div>
         </div>
 
         {/* Error Alert Banner */}

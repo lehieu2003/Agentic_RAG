@@ -259,4 +259,70 @@ describe('Sidebar Component', () => {
     fireEvent.click(screen.getByLabelText(/dismiss sidebar error/i));
     expect(onDismissError).toHaveBeenCalled();
   });
+
+  it('renders recent chat sessions and allows switching session', () => {
+    const onSelectSession = vi.fn();
+    const sessions = [{ id: 's1', title: 'Tính Reynolds', created_at: '', updated_at: '' }];
+    render(
+      <Sidebar
+        isOpen={true}
+        onClose={vi.fn()}
+        files={[]}
+        topK={8}
+        onTopKChange={vi.fn()}
+        onNewChat={vi.fn()}
+        onFileUpload={vi.fn()}
+        onDeleteFile={vi.fn()}
+        sessions={sessions}
+        activeSessionId="s1"
+        onSelectSession={onSelectSession}
+        onDeleteSession={vi.fn()}
+      />
+    );
+    expect(screen.getByText('Tính Reynolds')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('Tính Reynolds'));
+    expect(onSelectSession).toHaveBeenCalledWith('s1');
+  });
+
+  it('renders empty message when no chat sessions exist', () => {
+    render(
+      <Sidebar
+        isOpen={true}
+        onClose={vi.fn()}
+        files={[]}
+        topK={8}
+        onTopKChange={vi.fn()}
+        onNewChat={vi.fn()}
+        onFileUpload={vi.fn()}
+        onDeleteFile={vi.fn()}
+        sessions={[]}
+      />
+    );
+    expect(screen.getByText(/chưa có cuộc trò chuyện nào/i)).toBeInTheDocument();
+  });
+
+  it('allows deleting a session with confirmation', () => {
+    const onDeleteSession = vi.fn();
+    const sessions = [{ id: 's1', title: 'Tính Reynolds', created_at: '', updated_at: '' }];
+    render(
+      <Sidebar
+        isOpen={true}
+        onClose={vi.fn()}
+        files={[]}
+        topK={8}
+        onTopKChange={vi.fn()}
+        onNewChat={vi.fn()}
+        onFileUpload={vi.fn()}
+        onDeleteFile={vi.fn()}
+        sessions={sessions}
+        activeSessionId="s1"
+        onSelectSession={vi.fn()}
+        onDeleteSession={onDeleteSession}
+      />
+    );
+    const deleteBtn = screen.getByLabelText(/xóa cuộc trò chuyện/i);
+    fireEvent.click(deleteBtn);
+    expect(window.confirm).toHaveBeenCalledWith('Bạn có chắc chắn muốn xóa cuộc trò chuyện này không?');
+    expect(onDeleteSession).toHaveBeenCalledWith('s1');
+  });
 });

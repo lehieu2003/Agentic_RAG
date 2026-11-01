@@ -62,4 +62,33 @@ describe('ChatMessage Component', () => {
     expect(screen.getByText(/Quy trình suy luận/i)).toBeInTheDocument();
     expect(screen.getByText(/Dữ liệu trích dẫn/i)).toBeInTheDocument();
   });
+
+  it('renders standalone_question context badge when query was reformulated', () => {
+    const onCitationClick = vi.fn();
+    const message: ChatMessageData = {
+      id: '4',
+      role: 'assistant',
+      content: 'Lưu lượng định mức là 50 m3/h.',
+      standalone_question: 'Lưu lượng định mức của bơm ly tâm là bao nhiêu?',
+      timestamp: Date.now(),
+    };
+
+    render(<ChatMessage message={message} onCitationClick={onCitationClick} />);
+    expect(
+      screen.getByText(/🔍 Đã hiểu ngữ cảnh: "Lưu lượng định mức của bơm ly tâm là bao nhiêu\?"/)
+    ).toBeInTheDocument();
+  });
+
+  it('does not render standalone_question badge when absent or identical', () => {
+    const onCitationClick = vi.fn();
+    const message: ChatMessageData = {
+      id: '5',
+      role: 'assistant',
+      content: 'Câu trả lời trực tiếp.',
+      timestamp: Date.now(),
+    };
+
+    render(<ChatMessage message={message} onCitationClick={onCitationClick} />);
+    expect(screen.queryByText(/🔍 Đã hiểu ngữ cảnh:/)).not.toBeInTheDocument();
+  });
 });

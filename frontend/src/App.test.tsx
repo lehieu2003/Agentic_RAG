@@ -6,6 +6,7 @@ describe('App Split-Screen Workspace Integration', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     vi.spyOn(window, 'confirm').mockReturnValue(true);
+    localStorage.clear();
     globalThis.fetch = vi.fn().mockImplementation((url: string, options?: any) => {
       const method = options?.method?.toUpperCase() || 'GET';
 
@@ -37,6 +38,38 @@ describe('App Split-Screen Workspace Integration', () => {
           }),
         });
       }
+      if (url.includes('/api/v1/sessions')) {
+        if (method === 'DELETE') {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({ status: 'deleted' }),
+          });
+        }
+        if (url.match(/\/api\/v1\/sessions\/.+/)) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({
+              session: { id: 's1', title: 'Tính Reynolds' },
+              messages: [
+                { role: 'user', content: 'Tính Reynolds của đường ống' },
+                {
+                  role: 'assistant',
+                  content: 'Reynolds Re = 228,571.',
+                  standalone_question: 'Tính chuẩn số Reynolds cho đường ống dẫn dầu',
+                },
+              ],
+            }),
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            sessions: [
+              { id: 's1', title: 'Tính Reynolds', created_at: '', updated_at: '' },
+            ],
+          }),
+        });
+      }
       if (url.includes('/api/v1/query')) {
         return Promise.resolve({
           ok: true,
@@ -52,6 +85,7 @@ describe('App Split-Screen Workspace Integration', () => {
               },
             ],
             reasoning_steps: [{ node: 'retrieve', status: 'completed' }],
+            session_id: 's1',
           }),
         });
       }
@@ -340,5 +374,60 @@ describe('App Split-Screen Workspace Integration', () => {
     expect(screen.getByText('rerank')).toBeInTheDocument();
     expect(screen.getByText('grade_relevance')).toBeInTheDocument();
     expect(screen.getByText('generate')).toBeInTheDocument();
+  });
+
+  it('fetches sessions on mount and displays them in sidebar', async () => {
+    render(<App />);
+    fireEvent.click(screen.getByLabelText(/toggle sidebar/i));
+    await waitFor(() => {
+      expect(screen.getByText('Tính Reynolds')).toBeInTheDocument();
+    });
+  });
+
+  it('loads session messages when session is selected from sidebar', async () => {
+    render(<App />);
+    fireEvent.click(screen.getByLabelText(/toggle sidebar/i));
+    await waitFor(() => {
+      expect(screen.getByText('Tính Reynolds')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText('Tính Reynolds'));
+
+    await waitFor(() => {
+      expect(screen.getByText('Tính Reynolds của đường ống')).toBeInTheDocument();
+      expect(screen.getByText('Reynolds Re = 228,571.')).toBeInTheDocument();
+      expect(
+        screen.getByText(/🔍 Đã hiểu ngữ cảnh: "Tính chuẩn số Reynolds cho đường ống dẫn dầu"/)
+      ).toBeInTheDocument();
+    });
+  });
+
+  it('restores active session from localStorage on mount', async () => {
+    localStorage.setItem('doc_qa_active_session_id', 's1');
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Tính Reynolds của đường ống')).toBeInTheDocument();
+      expect(screen.getByText('Reynolds Re = 228,571.')).toBeInTheDocument();
+    });
+  });
+
+  it('deleting active session resets chat and clears localStorage', async () => {
+    localStorage.setItem('doc_qa_active_session_id', 's1');
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Tính Reynolds của đường ống')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByLabelText(/toggle sidebar/i));
+    const deleteBtn = screen.getByLabelText(/xóa cuộc trò chuyện/i);
+    fireEvent.click(deleteBtn);
+
+    await waitFor(() => {
+      expect(screen.queryByText('Tính Reynolds của đường ống')).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /tính toán chuẩn số reynolds/i })).toBeInTheDocument();
+      expect(localStorage.getItem('doc_qa_active_session_id')).toBeNull();
+    });
   });
 });
