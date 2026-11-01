@@ -168,7 +168,21 @@ def test_agent_chitchat_router_handles_greetings_without_db_query():
     mock_retriever = MagicMock(spec=BaseRetriever)
     agent = AgenticRAG(retriever=mock_retriever, llm_client=None)
 
-    greetings = ["hello", "Hello!", "hi", "xin chào", "Chào bạn", "bạn là ai", "cảm ơn", "tạm biệt"]
+    greetings = [
+        "hello",
+        "Hello!",
+        "hi",
+        "xin chào",
+        "Chào bạn",
+        "bạn là ai",
+        "bạn có thể làm gì",
+        "bạn giúp gì được cho tôi",
+        "how can you help me",
+        "what can you do",
+        "who are you",
+        "cảm ơn",
+        "tạm biệt",
+    ]
     for q in greetings:
         resp = agent.answer(q)
         assert resp.abstained is False, f"Failed for '{q}'"

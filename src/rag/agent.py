@@ -63,7 +63,16 @@ class AgenticRAG:
 
     CHITCHAT_PATTERNS = [
         (
-            r"^(xin\s+)?chào(\s+bạn|\s+trợ\s+lý|\s+bot)?[\s\.\?!]*$|^(hello|hi|hey|halo|hé\s+lô|alo)[\s\.\?!]*$|^(chào\s+buổi\s+sáng|good\s+morning|good\s+afternoon|good\s+evening)[\s\.\?!]*$",
+            r"^(?:hello|hi|hey|halo|howdy)(?:\s+(?:there|bot|assistant|friend))?[\s\.\?!]*$|^(?:good\s+(?:morning|afternoon|evening|day))[\s\.\?!]*$",
+            (
+                "Hello! I am your Technical Document Q&A Assistant (Document Q&A Assistant).\n\n"
+                "I can help you search, analyze technical specifications, verify engineering procedures, "
+                "and provide accurate page citations directly from your uploaded documents (PDF, DOCX, TXT, OCR images).\n\n"
+                "What technical information or document would you like to explore today?"
+            )
+        ),
+        (
+            r"^(?:xin\s+)?chào(?:\s+(?:bạn|trợ\s+lý|bot|ad|anh|chị|em|mọi\s+người))?[\s\.\?!]*$|^(?:hé\s+lô|alo)[\s\.\?!]*$|^(?:chào\s+buổi\s+(?:sáng|trưa|chiều|tối)|chúc\s+buổi\s+(?:sáng|trưa|chiều|tối))[\s\.\?!]*$",
             (
                 "Xin chào! Tôi là Trợ lý Hỏi đáp Tài liệu Kỹ thuật (Document Q&A Assistant).\n\n"
                 "Tôi có thể giúp bạn tra cứu, giải đáp thông số, quy trình kỹ thuật và trích dẫn nguồn số trang chính xác từ các tài liệu bạn đã tải lên (PDF, DOCX, TXT, Hình ảnh OCR).\n\n"
@@ -71,21 +80,49 @@ class AgenticRAG:
             )
         ),
         (
-            r"^(bạn\s+là\s+ai|who\s+are\s+you|bạn\s+có\s+thể\s+làm\s+gì|what\s+can\s+you\s+do|giới\s+thiệu(\s+về\s+bạn|\s+bản\s+thân)?|hướng\s+dẫn(\s+sử\s+dụng)?|help)[\s\.\?!]*$",
+            r"^(?:(?:how\s+(?:can|do)\s+you\s+(?:help|assist)(?:\s+me)?)|(?:what\s+(?:can\s+you\s+do|do\s+you\s+do|are\s+your\s+(?:capabilities|functions|features)))|(?:can\s+you\s+help(?:\s+me)?)|(?:who\s+are\s+you)|(?:what\s+is\s+your\s+(?:purpose|role|job))|(?:how\s+(?:does\s+this\s+work|do\s+i\s+use\s+(?:this|you)|to\s+use(?:\s+this)?))|(?:help(?:\s+me)?)|(?:guide(?:\s+me)?)|(?:(?:tell\s+me\s+about|introduce)\s+yourself))[\s\.\?!]*$",
             (
-                "Tôi là Trợ lý AI Hỏi đáp Kỹ thuật chuyên sâu. Nhiệm vụ của tôi là phân tích các tài liệu bạn tải lên "
-                "và trả lời câu hỏi kèm số trang, tên tài liệu chính xác (Citations). "
-                "Nếu câu hỏi không có căn cứ trong tài liệu, tôi sẽ từ chối để tránh suy đoán sai lệch."
+                "I am a specialized Technical Document Q&A Assistant.\n\n"
+                "Here is how I can help you:\n"
+                "1. **Document Q&A & Search:** Analyze technical procedures, standards, and engineering data from your uploaded files (PDF, DOCX, TXT, OCR images).\n"
+                "2. **Exact Citations & Page References:** Every answer is backed by exact document names and page numbers for verifiable audit trails.\n"
+                "3. **Engineering Calculations:** Guide step-by-step calculations (e.g., Reynolds numbers, head loss, ISO hydraulic standards) based on document formulas.\n"
+                "4. **Hallucination Prevention:** If the answer is not supported by your documents, I will explicitly abstain rather than speculate.\n\n"
+                "Feel free to ask any question about your uploaded documents!"
             )
         ),
         (
-            r"^(cảm\s+ơn|cám\s+ơn|thanks?|thank\s+you)(\s+bạn|\s+nhiều|\s+nhé|\s+trợ\s+lý|\s+bot)?[\s\.\?!]*$",
+            r"^(?:(?:bạn\s+(?:có\s+thể\s+làm\s+gì|làm\s+được\s+gì|giúp\s+(?:được\s+)?gì(?:\s+cho\s+tôi)?|giúp\s+gì\s+được(?:\s+cho\s+tôi)?|là\s+ai|có\s+chức\s+năng\s+gì|dùng\s+để\s+làm\s+gì))|(?:chức\s+năng\s+của\s+bạn(?:\s+là\s+gì)?)|(?:hướng\s+dẫn(?:\s+(?:tôi\s+)?(?:cách\s+)?(?:dùng|sử\s+dụng))?)|(?:trợ\s+giúp)|(?:giới\s+thiệu(?:\s+(?:về\s+bạn|bản\s+thân))?))[\s\.\?!]*$",
+            (
+                "Tôi là Trợ lý AI Hỏi đáp Kỹ thuật chuyên sâu.\n\n"
+                "Tôi có thể giúp bạn:\n"
+                "1. **Tra cứu & Hỏi đáp tài liệu:** Tìm kiếm và giải đáp thông số, quy trình kỹ thuật từ các tài liệu bạn đã tải lên (PDF, DOCX, TXT, OCR ảnh).\n"
+                "2. **Trích dẫn nguồn & Số trang chính xác:** Cung cấp dẫn chứng rõ ràng kèm tên tài liệu và số trang cho từng câu trả lời.\n"
+                "3. **Tính toán kỹ thuật:** Hướng dẫn giải chi tiết các bài toán kỹ thuật theo công thức trong tài liệu (chuẩn số Reynolds, tổn thất cột áp, ISO thủy lực...).\n"
+                "4. **Chống suy đoán sai lệch:** Nếu câu hỏi không có căn cứ trong tài liệu, tôi sẽ từ chối để đảm bảo độ tin cậy kỹ thuật.\n\n"
+                "Bạn có thể đặt câu hỏi về bất kỳ tài liệu nào đã tải lên!"
+            )
+        ),
+        (
+            r"^(?:thanks?(?:\s+a\s+lot|\s+so\s+much)?|thank\s+you(?:\s+very\s+much|\s+so\s+much)?)[\s\.\?!]*$",
+            (
+                "You're very welcome! If you have any further questions about your documents, feel free to ask."
+            )
+        ),
+        (
+            r"^(?:cảm\s+ơn|cám\s+ơn|thanks?|thank\s+you)(?:\s+(?:bạn|nhiều|rất\s+nhiều|nhé|nha|trợ\s+lý|bot))*\s*[\s\.\?!]*$",
             (
                 "Rất vui được hỗ trợ bạn! Nếu bạn có thêm câu hỏi kỹ thuật nào về tài liệu, hãy cứ đặt câu hỏi nhé."
             )
         ),
         (
-            r"^(tạm\s+biệt|bye|goodbye|hẹn\s+gặp\s+lại|bai\s+bai)[\s\.\?!]*$",
+            r"^(?:goodbye|bye(?:\s+bye)?|see\s+you(?:\s+later|\s+soon)?|have\s+a\s+(?:good|nice)\s+day)[\s\.\?!]*$",
+            (
+                "Goodbye! Have a great day and see you next time you need to look up documentation."
+            )
+        ),
+        (
+            r"^(?:tạm\s+biệt|bye|goodbye|hẹn\s+gặp\s+lại|bai\s+bai)[\s\.\?!]*$",
             (
                 "Tạm biệt bạn! Chúc bạn làm việc hiệu quả và hẹn gặp lại khi bạn cần tra cứu tài liệu!"
             )
