@@ -13,7 +13,7 @@ Hệ thống tuân thủ kiến trúc Clean / Hexagonal Modular Monorepo kết h
 ```
                       +-----------------------------+
                       |        Client / User        |
-                      | (React SPA / Streamlit/API) |
+                      |    (React SPA / REST API)   |
                       +--------------+--------------+
                                      | HTTP REST
                                      v
@@ -112,7 +112,7 @@ Hệ thống tuân thủ kiến trúc Clean / Hexagonal Modular Monorepo kết h
    - **History-aware Contextualizer**: Node `rephrase_question` phân tích ngữ cảnh lịch sử hội thoại gần nhất và viết lại các câu hỏi kế tiếp mơ hồ (ví dụ: *"Áp suất của nó là bao nhiêu?"* -> *"Áp suất làm việc tối đa của máy bơm công nghiệp ly tâm là bao nhiêu?"*) để truy xuất chính xác tài liệu liên quan mà vẫn bảo toàn câu hỏi nguyên bản của người dùng trên giao diện.
    - **Persistent SQLite Session Store**: Lưu trữ phiên và tin nhắn bền vững tại `data/chat_history.db` (hỗ trợ foreign key cascade deletion khi xóa phiên), tích hợp cơ chế sliding window context giới hạn số lượt hội thoại gần nhất nạp vào prompt nhằm tối ưu hóa chi phí token.
    - **Automatic Session Title Generation**: Tự động tạo tiêu đề ngắn gọn từ câu hỏi đầu tiên của người dùng khi khởi tạo phiên mới.
-   - **Đồng bộ hóa trên cả 2 giao diện**: React SPA quản lý danh sách cuộc trò chuyện gần đây ở Sidebar (chọn, chuyển đổi, xóa phiên); Streamlit companion tự động lưu và gửi `session_id` qua `st.session_state`.
+   - **Giao diện React SPA**: Quản lý danh sách cuộc trò chuyện gần đây ở Sidebar (chọn, chuyển đổi, xóa phiên) với trạng thái lưu trữ bền vững.
 
 3. **Persistent Raw File Storage & Filename Deduplication**:
    - Lưu trữ an toàn các tệp tài liệu nguyên bản vào thư mục `data/uploads/`.
@@ -130,8 +130,8 @@ Hệ thống tuân thủ kiến trúc Clean / Hexagonal Modular Monorepo kết h
    - **Ảnh kỹ thuật (PNG, JPG, JPEG)**: Nhận diện nội dung chữ trực tiếp từ ảnh qua RapidOCR engine (gán trang mặc định là 1).
 
 6. **Multi-file Batch Upload & Trực quan hóa tiến độ**:
-   - Tải lên đồng thời nhiều tệp tài liệu trong một lượt thao tác. Giao diện Streamlit điều phối upload tuần tự từng file kèm cơ chế xử lý lỗi độc lập.
-   - Theo dõi trạng thái trực tiếp theo thời gian thực qua container `st.status` và các thẻ thống kê `st.metric` (tổng số tệp, thành công, đã tồn tại / trùng lặp, thất bại, và tổng số chunk đã nạp vào vector database).
+   - Tải lên đồng thời nhiều tệp tài liệu trong một lượt thao tác qua giao diện React SPA với cơ chế xử lý lỗi độc lập cho từng file.
+   - Theo dõi trạng thái trực tiếp theo thời gian thực (tổng số tệp, thành công, đã tồn tại / trùng lặp, thất bại, và tổng số chunk đã nạp vào vector database).
 
 7. **Chunking bảo toàn số trang & metadata**:
    - Phân chia văn bản thành các đoạn (chunks) có overlap.
@@ -149,16 +149,13 @@ Hệ thống tuân thủ kiến trúc Clean / Hexagonal Modular Monorepo kết h
    - Định nghĩa API hợp đồng bằng Protocol Buffers (`proto/retrieval.proto`).
    - Cung cấp `start_grpc_server` và `GrpcRetriever` adapter. Chuyển đổi giữa chạy local và gRPC chỉ bằng 1 biến môi trường `RETRIEVAL_MODE=grpc`.
 
-11. **Giao diện Web Hiện Đại (React SPA Obsidian UI & Streamlit Companion)**:
-    - **React Single-Page Application (Primary UI)**:
-      - Thiết kế Dark Mode tối giản (Obsidian theme), font chữ kỹ thuật sắc nét, giảm mỏi mắt khi đọc tài liệu dài.
-      - **Split-view Document Viewer**: Xem tài liệu PDF/văn bản trực tiếp bên cạnh khung chat; nhấp vào badge trích dẫn sẽ tự động mở panel tài liệu và cuộn đến đúng trang (`#page={page}`).
-      - **Interactive Citations & Reasoning Steps**: Badge trích dẫn tương tác một chạm, hộp các bước suy luận Agentic RAG và chi tiết bằng chứng đối sánh (Evidence Chunks với Cosine score) có thể thu gọn/mở rộng.
-      - **Render Công thức Toán học LaTeX & Markdown**: Hỗ trợ toàn diện công thức toán học qua KaTeX (`$x$`, `$$x$$`) và định dạng GitHub Flavored Markdown (bảng thông số kỹ thuật, code block, checklist).
-      - **Quản lý tài liệu & Batch Upload**: Kéo thả, tải lên đồng thời nhiều tệp với tiến độ thời gian thực, xóa tài liệu khỏi index/đĩa cứng, điều chỉnh độ sâu `top_k`.
-      - **Thiết kế Responsive**: Tự động co giãn mượt mà trên thiết bị di động, tablet và desktop.
-    - **Giao diện Streamlit (Companion / Fallback UI)**:
-      - Giao diện chat phong cách ChatGPT hiện đại (`st.chat_message`, `st.chat_input`), phù hợp chạy thử nghiệm hoặc demo nhanh.
+11. **Giao diện Web Hiện Đại (React SPA Obsidian UI)**:
+    - Thiết kế Dark Mode tối giản (Obsidian theme), font chữ kỹ thuật sắc nét, giảm mỏi mắt khi đọc tài liệu dài.
+    - **Split-view Document Viewer**: Xem tài liệu PDF/văn bản trực tiếp bên cạnh khung chat; nhấp vào badge trích dẫn sẽ tự động mở panel tài liệu và cuộn đến đúng trang (`#page={page}`).
+    - **Interactive Citations & Reasoning Steps**: Badge trích dẫn tương tác một chạm, hộp các bước suy luận Agentic RAG và chi tiết bằng chứng đối sánh (Evidence Chunks với Cosine score) có thể thu gọn/mở rộng.
+    - **Render Công thức Toán học LaTeX & Markdown**: Hỗ trợ toàn diện công thức toán học qua KaTeX (`$x$`, `$$x$$`) và định dạng GitHub Flavored Markdown (bảng thông số kỹ thuật, code block, checklist).
+    - **Quản lý tài liệu & Batch Upload**: Kéo thả, tải lên đồng thời nhiều tệp với tiến độ thời gian thực, xóa tài liệu khỏi index/đĩa cứng, điều chỉnh độ sâu `top_k`.
+    - **Thiết kế Responsive**: Tự động co giãn mượt mà trên thiết bị di động, tablet và desktop.
 
 ---
 
@@ -221,16 +218,9 @@ npm run dev
   npm run test -- --run
   ```
 
-### 6. Khởi chạy Giao diện Streamlit (Companion / Fallback UI)
-Giao diện Streamlit truyền thống vẫn được duy trì song song phục vụ mục đích kiểm thử và demo nhanh:
-```bash
-.venv/bin/streamlit run src/ui/app.py
-```
-- Truy cập giao diện tại: [http://localhost:8501](http://localhost:8501)
+### 6. Sử dụng API RESTful
 
-### 7. Sử dụng API RESTful
-
-#### 7.1. Upload tài liệu (Lưu file & Khử trùng lặp)
+#### 6.1. Upload tài liệu (Lưu file & Khử trùng lặp)
 Endpoint `/api/v1/upload` tiếp nhận 1 tệp mỗi lượt yêu cầu (`multipart/form-data`). File được lưu vào `data/uploads/`. Nếu tên file đã tồn tại, API trả về `status: "already_exists"` và bỏ qua việc tạo vector mới.
 
 ```bash
@@ -266,7 +256,7 @@ Phản hồi mẫu:
 ```
 *(Nếu tệp đã tồn tại: `"status": "already_exists"`, `"chunks_indexed": 0`)*
 
-#### 7.2. Danh sách tài liệu đã lưu trữ
+#### 6.2. Danh sách tài liệu đã lưu trữ
 Lấy danh sách tất cả các tài liệu hiện đang được lưu trữ trong hệ thống:
 ```bash
 curl -X GET "http://localhost:8000/api/v1/files"
@@ -284,14 +274,14 @@ Phản hồi mẫu:
 }
 ```
 
-#### 7.3. Xem tài liệu an toàn trong trình duyệt (Inline Viewing & Jump to Page)
+#### 6.3. Xem tài liệu an toàn trong trình duyệt (Inline Viewing & Jump to Page)
 Mở trực tiếp tài liệu trong trình duyệt, kèm hỗ trợ nhảy đến số trang mong muốn thông qua URL hash:
 ```
 http://localhost:8000/api/v1/files/may_bom_cong_nghiep.pdf#page=3
 ```
 Endpoint bảo vệ an toàn tuyệt đối chống tấn công Path Traversal: các yêu cầu chứa đường dẫn bất thường (ví dụ: `../etc/passwd`) sẽ bị từ chối với mã lỗi `400 Bad Request`.
 
-#### 7.4. Đặt câu hỏi Q&A (Kích hoạt Agentic RAG & Ngữ cảnh Đa lượt)
+#### 6.4. Đặt câu hỏi Q&A (Kích hoạt Agentic RAG & Ngữ cảnh Đa lượt)
 Gửi câu hỏi tới hệ thống để thực thi quy trình Agentic RAG (Contextualizer -> Query Expansion -> Corrective Retrieval -> Reflection -> Grounding):
 - Truyền `session_id` để duy trì mạch hội thoại đa lượt (multi-turn context). Nếu `session_id` là `null` hoặc không truyền, hệ thống sẽ tự động tạo một phiên trò chuyện mới và trả về `session_id` trong phản hồi.
 - Khi có ngữ cảnh trước đó, hệ thống tự động viết lại câu hỏi kế tiếp mơ hồ thành câu hỏi độc lập (`standalone_question`) để truy vấn tài liệu chính xác nhất.
@@ -352,9 +342,9 @@ curl -X POST "http://localhost:8000/api/v1/query" \
 
 *(Hệ thống sẽ tự động ngữ cảnh hóa câu hỏi thành: "Cách khắc phục tình trạng cánh bơm bị mòn của máy bơm như thế nào?" và truy xuất trả lời chính xác dựa trên tài liệu).*
 
-#### 7.5. Quản lý phiên hội thoại (Conversational Session API)
+#### 6.5. Quản lý phiên hội thoại (Conversational Session API)
 
-##### 7.5.1. Lấy danh sách tất cả các phiên hội thoại
+##### 6.5.1. Lấy danh sách tất cả các phiên hội thoại
 Lấy danh sách các phiên trò chuyện, sắp xếp theo thời gian cập nhật mới nhất (`updated_at` giảm dần).
 Hỗ trợ tham số truy vấn tùy chọn `limit` (mặc định 50, từ 1 đến 200).
 
@@ -376,7 +366,7 @@ Phản hồi mẫu:
 }
 ```
 
-##### 7.5.2. Lấy chi tiết phiên hội thoại & lịch sử tin nhắn
+##### 6.5.2. Lấy chi tiết phiên hội thoại & lịch sử tin nhắn
 Truy xuất thông tin chi tiết một phiên cùng toàn bộ lịch sử tin nhắn đã gửi giữa người dùng và trợ lý:
 
 ```bash
@@ -417,7 +407,7 @@ Phản hồi mẫu:
 }
 ```
 
-##### 7.5.3. Xóa phiên hội thoại
+##### 6.5.3. Xóa phiên hội thoại
 Xóa hoàn toàn phiên hội thoại và tự động xóa toàn bộ tin nhắn liên quan trong cơ sở dữ liệu (`ON DELETE CASCADE`):
 
 ```bash

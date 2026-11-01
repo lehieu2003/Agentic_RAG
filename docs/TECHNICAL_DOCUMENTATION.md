@@ -17,7 +17,7 @@
 6. [Động cơ Agentic RAG (LangGraph State Machine)](#6-động-cơ-agentic-rag-langgraph-state-machine)
 7. [Các giải pháp xử lý chuyên sâu & Tối ưu hóa (Technical Innovations)](#7-các-giải-pháp-xử-lý-chuyên-sâu--tối-ưu-hóa-technical-innovations)
 8. [Tầng giao tiếp & API (FastAPI & gRPC Interfaces)](#8-tầng-giao-tiếp--api-fastapi--grpc-interfaces)
-9. [Giao diện người dùng (Streamlit ChatGPT-Style UI)](#9-giao-diện-người-dùng-streamlit-chatgpt-style-ui)
+9. [Giao diện người dùng (React SPA Obsidian UI)](#9-giao-diện-người-dùng-react-spa-obsidian-ui)
 10. [Hướng dẫn cấu hình & Triển khai (Configuration & Deployment)](#10-hướng-dẫn-cấu-hình--triển-khai-configuration--deployment)
 11. [Chiến lược kiểm thử & Đảm bảo chất lượng (Testing & QA)](#11-chiến-lược-kiểm-thử--đảm-bảo-chất-lượng-testing--qa)
 
@@ -42,7 +42,7 @@ Trong môi trường kỹ thuật, sản xuất và công nghiệp, các tài li
 - **Hợp nhất điểm số:** Reciprocal Rank Fusion (RRF, $k=60$).
 - **LLM Engine:** Google Gemini (`gemini-3.5-flash-lite`, fallback `gemini-flash-lite-latest`) hoặc OpenAI (`gpt-4o-mini`).
 - **Framework đồ thị tác tử:** LangGraph v2 (`StateGraph`).
-- **Giao diện:** Streamlit Dark Minimalist (ChatGPT style), FastAPI REST, gRPC microservice.
+- **Giao diện:** React SPA Dark Minimalist (Obsidian theme), FastAPI REST, gRPC microservice.
 
 ---
 
@@ -52,10 +52,10 @@ Hệ thống được thiết kế theo nguyên lý **Clean / Hexagonal Architec
 
 ```mermaid
 flowchart TD
-    subgraph UI ["Tầng Presentation (UI & Client)"]
-        Streamlit["Streamlit UI (Port 8501)\nChatGPT Dark Theme"]
-        APIClient["API Client (REST)"]
-        Streamlit --> APIClient
+    subgraph UI ["Tầng Presentation (React SPA Frontend)"]
+        ReactSPA["React SPA (Port 5173)\nObsidian Dark Theme"]
+        APIClient["Typed API Client (Fetch REST)"]
+        ReactSPA --> APIClient
     end
 
     subgraph Gateway ["Tầng API Gateway (FastAPI)"]
@@ -396,15 +396,15 @@ Khi chuyển biến môi trường `RETRIEVAL_MODE=grpc`, module Retrieval đư�
 
 ---
 
-## 9. Giao diện người dùng (Streamlit ChatGPT-Style UI)
+## 9. Giao diện người dùng (React SPA Obsidian UI)
 
-Giao diện được thiết kế theo phong cách tối giản của ChatGPT Dark Theme (`src/ui/`):
-- **Phối màu:** Nền đen than `#212121`, sidebar `#171717`, tin nhắn phản hồi dạng hội thoại tự nhiên.
-- **Thanh công cụ Sidebar thông minh:**
-  - Nút mở/đóng sidebar được cấu hình với độ tương phản cao, viền rõ ràng và icon sáng màu, luôn hiển thị nút mở `>>` ở góc trên bên trái ngay cả khi bị thu gọn.
-  - Quản lý danh sách tài liệu đã nạp trên hệ thống, kèm nút xóa nhanh từng file.
-  - Tích hợp bộ tải file đa định dạng kéo thả tiện lợi.
-- **Hộp mở rộng bằng chứng (Evidence Chunks Expander):** Dưới mỗi câu trả lời có hộp thông tin mở rộng hiển thị điểm tương đồng và liên kết một chạm `[🔗 Mở tài liệu tại trang này]`, tự động kích hoạt tính năng nhảy trang `#page={page}` của trình đọc PDF trên trình duyệt.
+Giao diện người dùng hiện đại được xây dựng hoàn toàn bằng React SPA với kiến trúc Dark Theme tối giản (Obsidian / Slate theme) tại thư mục `frontend/`:
+- **Phối màu & Thiết kế:** Nền than tối Obsidian `#0d1117`, panel trung tính `#161b22`, điểm nhấn công nghệ xanh Cyan/Blue sắc nét.
+- **Không gian làm việc chia đôi (Split-Screen Workspace):** Tích hợp khung chat tương tác bên trái và trình xem tài liệu (Document Viewer) bên phải.
+- **Trích dẫn thông minh một chạm (One-Click Citation Sync):** Nhấp vào bất kỳ badge trích dẫn hoặc bằng chứng nào sẽ tự động mở tài liệu và nhảy chính xác đến trang nguồn (`#page={page}`).
+- **Quản lý phiên hội thoại & Lịch sử chat (Multi-turn Sessions):** Sidebar quản lý danh sách cuộc hội thoại, chuyển đổi nhanh giữa các phiên và lưu trữ lịch sử bền vững trên máy chủ (SQLite).
+- **Trực quan hóa Agentic RAG:** Các bước suy luận (Reasoning Steps), huy hiệu chuẩn hóa ngữ cảnh câu hỏi (`standalone_question`), và hộp bằng chứng đối sánh điểm số cosine.
+- **Hỗ trợ công thức Toán học & Markdown:** Tích hợp KaTeX render trực tiếp biểu thức toán học và bảng đặc tả kỹ thuật.
 
 ---
 
@@ -413,6 +413,7 @@ Giao diện được thiết kế theo phong cách tối giản của ChatGPT Da
 ### 10.1. Yêu cầu hệ thống
 - **Hệ điều hành:** macOS / Linux / Windows WSL2.
 - **Python:** Phiên bản 3.10, 3.11 hoặc 3.12.
+- **Node.js:** Phiên bản 18 trở lên và npm.
 - **Tesseract OCR (Tùy chọn cho OCR fallback):** `brew install tesseract tesseract-lang` (macOS) hoặc `apt-get install tesseract-ocr tesseract-ocr-vie` (Ubuntu).
 
 ### 10.2. Thiết lập biến môi trường (`.env`)
@@ -452,10 +453,13 @@ pip install -e .
 .venv/bin/uvicorn src.api.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-#### Khởi động Streamlit Web UI:
+#### Khởi động React SPA Frontend:
 ```bash
-.venv/bin/streamlit run src/ui/app.py --server.port 8501
+cd frontend
+npm install
+npm run dev
 ```
+Truy cập giao diện tại: [http://localhost:5173](http://localhost:5173)
 
 #### Khởi động gRPC Server (Khi chạy ở chế độ microservice):
 ```bash
@@ -486,19 +490,19 @@ tests/
 ├── test_rag.py                 # Kiểm thử prompt synthesis, citation parsing, abstention
 ├── test_reranker.py            # Kiểm thử khởi tạo lười (lazy load) và ranking BAAI reranker
 ├── test_retrieval.py           # Kiểm thử giao diện LocalRetriever
-├── test_ui_api_client.py       # Kiểm thử client kết nối backend từ UI
-├── test_ui_app.py              # Kiểm thử session state và luồng render Streamlit
-├── test_ui_components.py       # Kiểm thử giao diện ChatGPT, badge trích dẫn, sidebar
+├── test_session_api.py         # Kiểm thử REST API quản lý session và lịch sử hội thoại
+├── test_session_store.py       # Kiểm thử SQLite SessionStore, cascade deletion, sliding window
+├── test_contextualizer.py      # Kiểm thử Node contextualize query chuẩn hoá câu hỏi đa lượt
 └── test_vector_store.py        # Kiểm thử tích hợp Qdrant Cloud / In-memory
 ```
 
 ### Chạy kiểm thử tự động:
 ```bash
-# Chạy toàn bộ 111 bài test
+# Chạy toàn bộ bài test Backend (Pytest)
 .venv/bin/pytest -v
 
-# Chạy riêng kiểm thử Agentic RAG và Hybrid Retrieval
-.venv/bin/pytest tests/test_agentic_rag.py tests/test_bm25.py tests/test_rag.py -v
+# Chạy toàn bộ bài test Frontend (Vitest)
+cd frontend && npm run test -- --run
 ```
 
 ---
