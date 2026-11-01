@@ -5,6 +5,7 @@
 import type {
   HealthResponse,
   FileInfo,
+  FileListResponse,
   FileUploadResponse,
   QAResponse,
   Citation,
@@ -49,8 +50,8 @@ export async function checkHealth(): Promise<HealthResponse> {
  */
 export async function getFiles(): Promise<FileInfo[]> {
   const res = await fetch(`${API_BASE}/files`);
-  const data = await handleResponse<any>(res);
-  const list: any[] = Array.isArray(data) ? data : (data.files || []);
+  const data = await handleResponse<FileInfo[] | FileListResponse>(res);
+  const list: FileInfo[] = Array.isArray(data) ? data : (data.files || []);
   return list.map((item) => ({
     ...item,
     filename: item.filename,

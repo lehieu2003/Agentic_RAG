@@ -40,6 +40,15 @@ describe('ChatInput Component', () => {
     expect(onSendMessage).toHaveBeenCalledWith('Đường kính D=100');
   });
 
+  it('does not submit when Enter key is pressed during IME composition', () => {
+    const onSendMessage = vi.fn();
+    render(<ChatInput onSendMessage={onSendMessage} isQuerying={false} />);
+    const textarea = screen.getByPlaceholderText(/Nhập câu hỏi kỹ thuật/i);
+    fireEvent.change(textarea, { target: { value: 'Công thức' } });
+    fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false, isComposing: true });
+    expect(onSendMessage).not.toHaveBeenCalled();
+  });
+
   it('disables input when isQuerying is true', () => {
     render(<ChatInput onSendMessage={vi.fn()} isQuerying={true} />);
     const textarea = screen.getByPlaceholderText(/Hệ thống đang xử lý/i);

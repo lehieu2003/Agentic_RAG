@@ -12,8 +12,8 @@ Hệ thống tuân thủ kiến trúc Clean / Hexagonal Modular Monorepo kết h
 
 ```
                       +-----------------------------+
-                      |       Client / User         |
-                      |  (Streamlit UI / REST API)  |
+                      |        Client / User        |
+                      | (React SPA / Streamlit/API) |
                       +--------------+--------------+
                                      | HTTP REST
                                      v
@@ -140,17 +140,16 @@ Hệ thống tuân thủ kiến trúc Clean / Hexagonal Modular Monorepo kết h
    - Định nghĩa API hợp đồng bằng Protocol Buffers (`proto/retrieval.proto`).
    - Cung cấp `start_grpc_server` và `GrpcRetriever` adapter. Chuyển đổi giữa chạy local và gRPC chỉ bằng 1 biến môi trường `RETRIEVAL_MODE=grpc`.
 
-10. **Giao diện Web Trực Quan (Streamlit ChatGPT-style UI)**:
-    - Giao diện chat phong cách ChatGPT hiện đại (`st.chat_message`, `st.chat_input`).
-    - Gợi ý câu hỏi bắt đầu (Prompt Suggestions) nhanh chóng.
-    - **Trích dẫn Clickable HTML Badges**: Nhấp vào badge trích dẫn `📄 [doc_name, Trang X]` để mở tài liệu trong tab mới và cuộn ngay đến trang tương ứng.
-    - Chi tiết bằng chứng truy xuất (Evidence chunks) với điểm tương đồng (Cosine similarity score) và liên kết tài liệu trực tiếp.
-    - **Sidebar quản lý tài liệu**:
-      - 🟢 Theo dõi trạng thái kết nối FastAPI Backend theo thời gian thực.
-      - ⚙️ Điều chỉnh thanh trượt độ sâu truy xuất `top_k` (từ 1 đến 10).
-      - 📁 Nạp tài liệu hàng loạt với theo dõi tiến độ chi tiết.
-      - 📚 Xem danh sách các tài liệu đã lưu trữ trên server (`GET /api/v1/files`) kèm kích thước và thời gian tạo.
-      - ➕ Nút tạo phiên hỏi đáp mới.
+10. **Giao diện Web Hiện Đại (React SPA Obsidian UI & Streamlit Companion)**:
+    - **React Single-Page Application (Primary UI)**:
+      - Thiết kế Dark Mode tối giản (Obsidian theme), font chữ kỹ thuật sắc nét, giảm mỏi mắt khi đọc tài liệu dài.
+      - **Split-view Document Viewer**: Xem tài liệu PDF/văn bản trực tiếp bên cạnh khung chat; nhấp vào badge trích dẫn sẽ tự động mở panel tài liệu và cuộn đến đúng trang (`#page={page}`).
+      - **Interactive Citations & Reasoning Steps**: Badge trích dẫn tương tác một chạm, hộp các bước suy luận Agentic RAG và chi tiết bằng chứng đối sánh (Evidence Chunks với Cosine score) có thể thu gọn/mở rộng.
+      - **Render Công thức Toán học LaTeX & Markdown**: Hỗ trợ toàn diện công thức toán học qua KaTeX (`$x$`, `$$x$$`) và định dạng GitHub Flavored Markdown (bảng thông số kỹ thuật, code block, checklist).
+      - **Quản lý tài liệu & Batch Upload**: Kéo thả, tải lên đồng thời nhiều tệp với tiến độ thời gian thực, xóa tài liệu khỏi index/đĩa cứng, điều chỉnh độ sâu `top_k`.
+      - **Thiết kế Responsive**: Tự động co giãn mượt mà trên thiết bị di động, tablet và desktop.
+    - **Giao diện Streamlit (Companion / Fallback UI)**:
+      - Giao diện chat phong cách ChatGPT hiện đại (`st.chat_message`, `st.chat_input`), phù hợp chạy thử nghiệm hoặc demo nhanh.
 
 ---
 
@@ -158,6 +157,7 @@ Hệ thống tuân thủ kiến trúc Clean / Hexagonal Modular Monorepo kết h
 
 ### Yêu cầu môi trường
 - Python 3.10 trở lên (khuyến nghị Python 3.12).
+- Node.js 18 trở lên và npm (dành cho React Frontend).
 - MacOS / Linux / Windows.
 
 ### 1. Khởi tạo môi trường ảo và cài đặt thư viện
@@ -187,14 +187,41 @@ python scripts/run_eval.py
 
 ### 4. Khởi chạy FastAPI Backend
 ```bash
-uvicorn src.api.main:app --host 0.0.0.0 --port 8000 --reload
+.venv/bin/uvicorn src.api.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 - API Docs Swagger: [http://localhost:8000/docs](http://localhost:8000/docs)
 - Health Check: `GET http://localhost:8000/api/v1/health`
 
-### 5. Sử dụng API RESTful
+### 5. Khởi chạy React SPA Frontend (Khuyến nghị / Primary UI)
+Mở một terminal mới và chạy:
+```bash
+cd frontend
+npm install
+npm run dev
+```
+- Truy cập giao diện tại: [http://localhost:5173](http://localhost:5173)
+- **Đóng gói Production Build:**
+  ```bash
+  cd frontend
+  npm run build
+  ```
+  Tệp build tĩnh sẵn sàng phục vụ sẽ được xuất bản tại thư mục `frontend/dist/`.
+- **Chạy bộ kiểm thử Frontend (Vitest):**
+  ```bash
+  cd frontend
+  npm run test -- --run
+  ```
 
-#### 5.1. Upload tài liệu (Lưu file & Khử trùng lặp)
+### 6. Khởi chạy Giao diện Streamlit (Companion / Fallback UI)
+Giao diện Streamlit truyền thống vẫn được duy trì song song phục vụ mục đích kiểm thử và demo nhanh:
+```bash
+.venv/bin/streamlit run src/ui/app.py
+```
+- Truy cập giao diện tại: [http://localhost:8501](http://localhost:8501)
+
+### 7. Sử dụng API RESTful
+
+#### 7.1. Upload tài liệu (Lưu file & Khử trùng lặp)
 Endpoint `/api/v1/upload` tiếp nhận 1 tệp mỗi lượt yêu cầu (`multipart/form-data`). File được lưu vào `data/uploads/`. Nếu tên file đã tồn tại, API trả về `status: "already_exists"` và bỏ qua việc tạo vector mới.
 
 ```bash
@@ -230,7 +257,7 @@ Phản hồi mẫu:
 ```
 *(Nếu tệp đã tồn tại: `"status": "already_exists"`, `"chunks_indexed": 0`)*
 
-#### 5.2. Danh sách tài liệu đã lưu trữ
+#### 7.2. Danh sách tài liệu đã lưu trữ
 Lấy danh sách tất cả các tài liệu hiện đang được lưu trữ trong hệ thống:
 ```bash
 curl -X GET "http://localhost:8000/api/v1/files"
@@ -248,14 +275,14 @@ Phản hồi mẫu:
 }
 ```
 
-#### 5.3. Xem tài liệu an toàn trong trình duyệt (Inline Viewing & Jump to Page)
+#### 7.3. Xem tài liệu an toàn trong trình duyệt (Inline Viewing & Jump to Page)
 Mở trực tiếp tài liệu trong trình duyệt, kèm hỗ trợ nhảy đến số trang mong muốn thông qua URL hash:
 ```
 http://localhost:8000/api/v1/files/may_bom_cong_nghiep.pdf#page=3
 ```
 Endpoint bảo vệ an toàn tuyệt đối chống tấn công Path Traversal: các yêu cầu chứa đường dẫn bất thường (ví dụ: `../etc/passwd`) sẽ bị từ chối với mã lỗi `400 Bad Request`.
 
-#### 5.4. Đặt câu hỏi Q&A (Kích hoạt Agentic RAG)
+#### 7.4. Đặt câu hỏi Q&A (Kích hoạt Agentic RAG)
 Gửi câu hỏi tới hệ thống để thực thi quy trình Agentic RAG (Query Expansion -> Corrective Retrieval -> Reflection -> Grounding):
 ```bash
 curl -X POST "http://localhost:8000/api/v1/query" \
@@ -285,24 +312,6 @@ Phản hồi mẫu:
   ]
 }
 ```
-
-### 6. Khởi chạy Giao diện Chatbot Streamlit (ChatGPT-style UI)
-Sau khi khởi động FastAPI Backend (bước 4), mở một terminal mới và chạy:
-```bash
-.venv/bin/streamlit run src/ui/app.py
-```
-- Truy cập giao diện tại: [http://localhost:8501](http://localhost:8501)
-- **Tính năng UI:**
-  - Nhập câu hỏi tự nhiên hoặc bấm vào các câu hỏi mẫu gợi ý trên màn hình.
-  - Phản hồi từ Agentic Bot: Kèm trích dẫn tương tác dạng badge `📄 [doc_name, Trang X]`. Khi click chuột vào badge, trình duyệt sẽ mở file tài liệu và cuộn ngay đến trang tương ứng trong tab mới.
-  - Hộp mở rộng `🔍 Chi tiết đoạn trích dẫn (Evidence Chunks)` hiển thị điểm tương đồng vector (Cosine similarity score) và liên kết trực tiếp đến từng trang tài liệu.
-  - Sidebar bên trái:
-    - 🟢 Xem trạng thái kết nối tới FastAPI Backend theo thời gian thực.
-    - ⚙️ Kéo thanh trượt điều chỉnh độ sâu truy xuất `top_k` (từ 1 đến 10).
-    - 📁 **Tải lên hàng loạt tài liệu (Multi-file Batch Upload)**: Kéo thả hoặc chọn cùng lúc nhiều tệp định dạng `.pdf`, `.docx`, `.txt`, `.png`, `.jpg`, `.jpeg`. Giao diện điều phối gửi tuần tự từng file lên API backend.
-    - 📊 **Theo dõi trạng thái trực tiếp (`st.status` & `st.metric`)**: Hộp `st.status` mở rộng cập nhật thời gian thực tiến độ từng tệp trong batch, kèm các thẻ `st.metric` tổng kết trực quan (Tổng số tệp, Thành công, Đã tồn tại, Thất bại, Tổng số chunks đã nạp).
-    - 📚 **Thư viện tài liệu đã lưu (Stored Documents)**: Danh sách trực quan các tệp tài liệu đã lưu trong hệ thống kèm kích thước tệp.
-    - ➕ Bấm "Cuộc trò chuyện mới" để xóa lịch sử và bắt đầu phiên hỏi đáp mới.
 
 ---
 

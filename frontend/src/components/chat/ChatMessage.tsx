@@ -34,7 +34,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
           <div className="w-8 h-8 rounded-full bg-obsidian-subtle border border-obsidian-border flex items-center justify-center text-obsidian-accent-blue shrink-0 mt-0.5">
             <User className="w-4 h-4" />
           </div>
-          <div className="rounded-2xl rounded-tr-sm bg-obsidian-subtle border border-obsidian-border px-4 py-3 text-white text-sm shadow-md leading-relaxed whitespace-pre-wrap break-words">
+          <div className="rounded-2xl rounded-tr-sm bg-obsidian-subtle border border-obsidian-border px-4 py-3 text-white text-sm shadow-md leading-relaxed whitespace-pre-wrap break-words select-text">
             {message.content}
           </div>
         </div>
@@ -58,7 +58,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
           )}
 
           {/* Markdown Content with KaTeX & GFM */}
-          <div className="prose-obsidian text-sm text-obsidian-text leading-relaxed break-words overflow-hidden">
+          <div className="prose-obsidian text-sm text-obsidian-text leading-relaxed break-words overflow-hidden select-text">
             <ReactMarkdown
               remarkPlugins={[remarkMath, remarkGfm]}
               rehypePlugins={[[rehypeKatex, { throwOnError: false, strict: false }]]}

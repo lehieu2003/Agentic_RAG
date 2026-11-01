@@ -158,7 +158,7 @@ export default function App() {
   };
 
   return (
-    <div className="flex flex-col h-screen w-screen bg-obsidian-bg text-obsidian-text overflow-hidden select-none">
+    <div className="flex flex-col h-screen w-screen bg-obsidian-bg text-obsidian-text overflow-hidden">
       {/* App Header */}
       <Header
         isViewerOpen={isViewerOpen}
