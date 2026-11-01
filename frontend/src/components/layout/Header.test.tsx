@@ -59,4 +59,17 @@ describe('Header Component', () => {
     );
     expect(screen.getByText(/Mất kết nối/i)).toBeInTheDocument();
   });
+
+  it('formats large chunk count with toLocaleString', () => {
+    render(
+      <Header
+        isViewerOpen={false}
+        onToggleViewer={vi.fn()}
+        isSidebarOpen={false}
+        onToggleSidebar={vi.fn()}
+        health={{ status: 'healthy', vector_store_count: 12500 }}
+      />
+    );
+    expect(screen.getByText(new RegExp(`${(12500).toLocaleString()} chunks`))).toBeInTheDocument();
+  });
 });

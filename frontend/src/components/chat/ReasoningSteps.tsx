@@ -17,18 +17,29 @@ export interface ReasoningStepsProps {
 }
 
 const getNodeLabel = (nodeName: string): string => {
-  const normalized = nodeName.toLowerCase();
+  const normalized = nodeName.toLowerCase().replace(/^\d+\.?\s*/, '').trim();
   switch (normalized) {
+    case 'router':
+      return 'Định tuyến câu hỏi (Router)';
+    case 'expand_query':
+      return 'Mở rộng truy vấn (Expand Query)';
+    case 'hybrid_retrieve':
     case 'retrieve':
       return 'Truy xuất ngữ cảnh (Retrieve)';
     case 'rerank':
       return 'Tái xếp hạng liên quan (Rerank)';
+    case 'grade_relevance':
     case 'grade':
       return 'Đánh giá độ phù hợp (Grade)';
-    case 'generate':
-      return 'Tổng hợp câu trả lời (Generate)';
+    case 'rewrite_query':
     case 'rewrite':
       return 'Viết lại truy vấn (Rewrite)';
+    case 'generate':
+      return 'Tổng hợp câu trả lời (Generate)';
+    case 'validate_citations':
+      return 'Kiểm định trích dẫn (Validate Citations)';
+    case 'abstain':
+      return 'Từ chối trả lời (Abstain)';
     default:
       return nodeName;
   }
@@ -99,11 +110,16 @@ export const ReasoningSteps: React.FC<ReasoningStepsProps> = ({
               <div className="mt-0.5">{getStatusIcon(step.status)}</div>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="font-semibold text-white tracking-tight">
-                    {getNodeLabel(step.node)}
-                  </span>
+                  <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
+                    <span className="font-semibold text-white tracking-tight">
+                      {getNodeLabel(step.node)}
+                    </span>
+                    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                      {step.node.replace(/^\d+\.?\s*/, '').trim()}
+                    </span>
+                  </div>
                   {step.status && (
-                    <span className="text-[10px] uppercase font-mono px-1 rounded bg-obsidian-subtle text-obsidian-text-muted border border-obsidian-border/60">
+                    <span className="text-[10px] uppercase font-mono px-1 rounded bg-obsidian-subtle text-obsidian-text-muted border border-obsidian-border/60 shrink-0">
                       {step.status}
                     </span>
                   )}

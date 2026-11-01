@@ -142,4 +142,25 @@ describe('DocumentViewer Component', () => {
     const downloadLink = screen.getByLabelText(/download document/i);
     expect(downloadLink).toBeInTheDocument();
   });
+
+  it('resets page input when active document filename changes', () => {
+    const { rerender } = render(
+      <DocumentViewer
+        activeDocument={{ filename: 'docA.pdf', page: 1 }}
+        onClose={vi.fn()}
+      />
+    );
+    const pageInput = screen.getByLabelText(/page number/i) as HTMLInputElement;
+    fireEvent.change(pageInput, { target: { value: '99' } });
+    expect(pageInput.value).toBe('99');
+
+    // Switch to docB with page 1
+    rerender(
+      <DocumentViewer
+        activeDocument={{ filename: 'docB.pdf', page: 1 }}
+        onClose={vi.fn()}
+      />
+    );
+    expect(pageInput.value).toBe('1');
+  });
 });

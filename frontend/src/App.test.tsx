@@ -5,6 +5,7 @@ import App from './App';
 describe('App Split-Screen Workspace Integration', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
     globalThis.fetch = vi.fn().mockImplementation((url: string, options?: any) => {
       const method = options?.method?.toUpperCase() || 'GET';
 
@@ -207,5 +208,137 @@ describe('App Split-Screen Workspace Integration', () => {
         expect.objectContaining({ method: 'DELETE' })
       );
     });
+  });
+
+  it('handles upload failure and displays error banner in sidebar', async () => {
+    globalThis.fetch = vi.fn().mockImplementation((url: string) => {
+      if (url.includes('/api/v1/health')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ status: 'healthy', vector_store_count: 10 }),
+        });
+      }
+      if (url.includes('/api/v1/files')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ files: [] }),
+        });
+      }
+      if (url.includes('/api/v1/upload')) {
+        return Promise.resolve({
+          ok: false,
+          status: 400,
+          statusText: 'Bad Request',
+          json: async () => ({ detail: 'Tệp bị lỗi định dạng' }),
+        });
+      }
+      return Promise.reject(new Error(`Unhandled URL ${url}`));
+    });
+
+    render(<App />);
+    fireEvent.click(screen.getByLabelText(/toggle sidebar/i));
+
+    const file = new File(['content'], 'test.pdf', { type: 'application/pdf' });
+    const input = screen.getByTestId('file-upload-input');
+    fireEvent.change(input, { target: { files: [file] } });
+
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toHaveTextContent(/Lỗi tải tệp: Tệp bị lỗi định dạng/i);
+    });
+  });
+
+  it('handles delete failure and displays error banner in sidebar', async () => {
+    globalThis.fetch = vi.fn().mockImplementation((url: string, options?: any) => {
+      const method = options?.method?.toUpperCase() || 'GET';
+      if (url.includes('/api/v1/health')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ status: 'healthy', vector_store_count: 10 }),
+        });
+      }
+      if (url.includes('/api/v1/files')) {
+        if (method === 'DELETE') {
+          return Promise.resolve({
+            ok: false,
+            status: 500,
+            statusText: 'Internal Server Error',
+            json: async () => ({ detail: 'Không thể xóa tệp hệ thống' }),
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ files: [{ filename: 'loi_xoa.pdf', size: 1024 }] }),
+        });
+      }
+      return Promise.reject(new Error(`Unhandled URL ${url}`));
+    });
+
+    render(<App />);
+    fireEvent.click(screen.getByLabelText(/toggle sidebar/i));
+    await waitFor(() => {
+      expect(screen.getByText('loi_xoa.pdf')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByLabelText(/delete loi_xoa.pdf/i));
+
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toHaveTextContent(/Lỗi xóa tệp: Không thể xóa tệp hệ thống/i);
+    });
+  });
+
+  it('correctly parses backend string reasoning steps and displays clean badges', async () => {
+    globalThis.fetch = vi.fn().mockImplementation((url: string) => {
+      if (url.includes('/api/v1/health')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ status: 'healthy', vector_store_count: 10 }),
+        });
+      }
+      if (url.includes('/api/v1/files')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ files: [] }),
+        });
+      }
+      if (url.includes('/api/v1/query')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            answer: 'Đã hoàn tất quy trình suy luận.',
+            citations: [],
+            reasoning_steps: [
+              '1. router: Nhận diện câu hỏi là phân tích kỹ thuật',
+              '2. hybrid_retrieve: Tìm kiếm trong 10 đoạn tài liệu',
+              '3. rerank: Tái xếp hạng kết quả',
+              '4. grade_relevance: Đánh giá độ phù hợp',
+              '5. generate: Tổng hợp câu trả lời chi tiết',
+            ],
+          }),
+        });
+      }
+      return Promise.reject(new Error(`Unhandled URL ${url}`));
+    });
+
+    render(<App />);
+    const textarea = screen.getByPlaceholderText(/Nhập câu hỏi kỹ thuật/i);
+    fireEvent.change(textarea, { target: { value: 'Giải thích quy trình' } });
+    fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false });
+
+    await waitFor(() => {
+      expect(screen.getByText(/Đã hoàn tất quy trình suy luận/i)).toBeInTheDocument();
+    });
+
+    // Expand reasoning steps
+    fireEvent.click(screen.getByRole('button', { name: /Quy trình suy luận/i }));
+
+    expect(screen.getByText(/Nhận diện câu hỏi là phân tích kỹ thuật/i)).toBeInTheDocument();
+    expect(screen.getByText(/Tìm kiếm trong 10 đoạn tài liệu/i)).toBeInTheDocument();
+
+    // Verify clean node badges
+    expect(screen.getByText('router')).toBeInTheDocument();
+    expect(screen.getByText('hybrid_retrieve')).toBeInTheDocument();
+    expect(screen.getByText('rerank')).toBeInTheDocument();
+    expect(screen.getByText('grade_relevance')).toBeInTheDocument();
+    expect(screen.getByText('generate')).toBeInTheDocument();
   });
 });

@@ -29,11 +29,12 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
   className = '',
 }) => {
   const currentPage = activeDocument?.page ?? 1;
-  const [prevDocPage, setPrevDocPage] = useState<number | undefined>(activeDocument?.page);
+  const docKey = activeDocument ? `${activeDocument.filename}:${activeDocument.page ?? 1}` : '';
+  const [prevDocKey, setPrevDocKey] = useState<string>(docKey);
   const [pageInput, setPageInput] = useState<string>(String(currentPage));
 
-  if (activeDocument?.page !== prevDocPage) {
-    setPrevDocPage(activeDocument?.page);
+  if (docKey !== prevDocKey) {
+    setPrevDocKey(docKey);
     setPageInput(String(activeDocument?.page ?? 1));
   }
 

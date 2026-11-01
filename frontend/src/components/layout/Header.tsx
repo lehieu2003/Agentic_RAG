@@ -60,7 +60,7 @@ export const Header: React.FC<HeaderProps> = ({
               <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
               <span>Sẵn sàng</span>
               <span className="text-emerald-500/80">•</span>
-              <span>{chunkCount} chunks</span>
+              <span>{chunkCount.toLocaleString()} chunks</span>
             </div>
           ) : isConnecting ? (
             <div className="flex items-center gap-2 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-950/40 border border-amber-800/60 text-amber-300">

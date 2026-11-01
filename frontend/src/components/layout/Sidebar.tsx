@@ -8,6 +8,7 @@ import {
   Loader2,
   Database,
   SlidersHorizontal,
+  AlertCircle,
 } from 'lucide-react';
 import type { FileInfo } from '../../types';
 
@@ -21,6 +22,15 @@ export interface SidebarProps {
   onFileUpload: (file: File) => Promise<void>;
   onDeleteFile: (filename: string) => Promise<void>;
   isUploading?: boolean;
+  errorMessage?: string | null;
+  onDismissError?: () => void;
+}
+
+const ALLOWED_EXTENSIONS = ['.pdf', '.docx', '.txt', '.md'];
+
+function isValidFileExtension(fileName: string): boolean {
+  const lower = fileName.toLowerCase();
+  return ALLOWED_EXTENSIONS.some((ext) => lower.endsWith(ext));
 }
 
 function formatFileSize(bytes: number): string {
@@ -40,13 +50,23 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onFileUpload,
   onDeleteFile,
   isUploading = false,
+  errorMessage,
+  onDismissError,
 }) => {
   const [isDragging, setIsDragging] = useState(false);
+  const [localError, setLocalError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   if (!isOpen) {
     return null;
   }
+
+  const currentError = errorMessage || localError;
+
+  const handleDismissError = () => {
+    setLocalError(null);
+    onDismissError?.();
+  };
 
   const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
@@ -69,6 +89,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
     const droppedFile = e.dataTransfer.files?.[0];
     if (droppedFile) {
+      if (!isValidFileExtension(droppedFile.name)) {
+        setLocalError(
+          `Định dạng tệp "${droppedFile.name}" không được hỗ trợ. Vui lòng chọn .pdf, .docx, .txt hoặc .md`
+        );
+        return;
+      }
+      setLocalError(null);
+      onDismissError?.();
       await onFileUpload(droppedFile);
     }
   };
@@ -76,10 +104,30 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const handleFileInputChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
     if (selectedFile) {
+      if (!isValidFileExtension(selectedFile.name)) {
+        setLocalError(
+          `Định dạng tệp "${selectedFile.name}" không được hỗ trợ. Vui lòng chọn .pdf, .docx, .txt hoặc .md`
+        );
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
+        return;
+      }
+      setLocalError(null);
+      onDismissError?.();
       await onFileUpload(selectedFile);
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
+    }
+  };
+
+  const handleDelete = (file: FileInfo) => {
+    const confirmed = window.confirm(
+      `Bạn có chắc chắn muốn xóa "${file.filename}" khỏi hệ thống không?`
+    );
+    if (confirmed) {
+      onDeleteFile(file.filename);
     }
   };
 
@@ -118,6 +166,27 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <span>Cuộc trò chuyện mới</span>
           </button>
         </div>
+
+        {/* Error Alert Banner */}
+        {currentError && (
+          <div
+            role="alert"
+            className="mx-3 mt-2 p-2.5 rounded-lg bg-rose-500/15 border border-rose-500/30 text-rose-200 text-xs flex items-start justify-between gap-2"
+          >
+            <div className="flex items-start gap-2 min-w-0">
+              <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+              <span className="text-[11px] leading-tight break-words">{currentError}</span>
+            </div>
+            <button
+              type="button"
+              onClick={handleDismissError}
+              aria-label="Dismiss sidebar error"
+              className="text-rose-400 hover:text-white shrink-0 p-0.5 rounded transition-colors"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
 
         {/* TopK slider section */}
         <div className="p-3 border-b border-obsidian-border space-y-2 bg-obsidian-bg/40">
@@ -244,7 +313,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     type="button"
                     onClick={(e) => {
                       e.stopPropagation();
-                      onDeleteFile(file.filename);
+                      handleDelete(file);
                     }}
                     aria-label={`Delete ${file.filename}`}
                     className="p-1 rounded text-obsidian-text-muted hover:text-rose-400 hover:bg-rose-950/40 transition-colors shrink-0"

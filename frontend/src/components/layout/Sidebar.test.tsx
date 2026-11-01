@@ -1,8 +1,16 @@
 import { render, screen, fireEvent } from '@testing-library/react';
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import Sidebar from './Sidebar';
 
 describe('Sidebar Component', () => {
+  beforeEach(() => {
+    vi.spyOn(window, 'confirm').mockImplementation(() => true);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   const files = [
     { filename: 'tài liệu máy bơm.pdf', size: 1048576 },
     { filename: 'huong_dan_iso.docx', size: 50000 },
@@ -180,5 +188,75 @@ describe('Sidebar Component', () => {
     );
     fireEvent.click(screen.getByLabelText(/close sidebar/i));
     expect(onClose).toHaveBeenCalled();
+  });
+
+  it('prompts window.confirm and aborts deletion if user cancels', () => {
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    const onDeleteFile = vi.fn();
+    render(
+      <Sidebar
+        isOpen={true}
+        onClose={vi.fn()}
+        files={files}
+        topK={8}
+        onTopKChange={vi.fn()}
+        onNewChat={vi.fn()}
+        onFileUpload={vi.fn()}
+        onDeleteFile={onDeleteFile}
+      />
+    );
+    fireEvent.click(screen.getByLabelText(/delete tài liệu máy bơm.pdf/i));
+    expect(confirmSpy).toHaveBeenCalledWith(
+      'Bạn có chắc chắn muốn xóa "tài liệu máy bơm.pdf" khỏi hệ thống không?'
+    );
+    expect(onDeleteFile).not.toHaveBeenCalled();
+  });
+
+  it('rejects unsupported file extension on drop with visual feedback', () => {
+    const onFileUpload = vi.fn();
+    render(
+      <Sidebar
+        isOpen={true}
+        onClose={vi.fn()}
+        files={files}
+        topK={8}
+        onTopKChange={vi.fn()}
+        onNewChat={vi.fn()}
+        onFileUpload={onFileUpload}
+        onDeleteFile={vi.fn()}
+      />
+    );
+    const dropzone = screen.getByRole('button', { name: /tải lên tài liệu/i });
+    const unsupportedFile = new File(['content'], 'malware.exe', { type: 'application/x-msdownload' });
+
+    fireEvent.drop(dropzone, {
+      dataTransfer: {
+        files: [unsupportedFile],
+      },
+    });
+
+    expect(onFileUpload).not.toHaveBeenCalled();
+    expect(screen.getByRole('alert')).toHaveTextContent(/không được hỗ trợ/i);
+  });
+
+  it('displays external errorMessage and allows dismissing it', () => {
+    const onDismissError = vi.fn();
+    render(
+      <Sidebar
+        isOpen={true}
+        onClose={vi.fn()}
+        files={files}
+        topK={8}
+        onTopKChange={vi.fn()}
+        onNewChat={vi.fn()}
+        onFileUpload={vi.fn()}
+        onDeleteFile={vi.fn()}
+        errorMessage="Lỗi mạng: Không thể tải danh sách tài liệu"
+        onDismissError={onDismissError}
+      />
+    );
+    expect(screen.getByRole('alert')).toHaveTextContent('Lỗi mạng: Không thể tải danh sách tài liệu');
+    fireEvent.click(screen.getByLabelText(/dismiss sidebar error/i));
+    expect(onDismissError).toHaveBeenCalled();
   });
 });
