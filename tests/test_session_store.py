@@ -1,0 +1,99 @@
+import tempfile
+import pytest
+from pathlib import Path
+from src.storage.session_store import SessionStore
+
+
+@pytest.fixture
+def store():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_path = str(Path(tmpdir) / "nested" / "dir" / "test_chat.db")
+        yield SessionStore(db_path=db_path)
+
+
+def test_create_and_get_session(store):
+    sess_id = store.create_session(title="Câu hỏi máy bơm")
+    sess = store.get_session(sess_id)
+    assert sess is not None
+    assert sess["id"] == sess_id
+    assert sess["title"] == "Câu hỏi máy bơm"
+    assert "created_at" in sess
+    assert "updated_at" in sess
+
+
+def test_create_session_defaults(store):
+    sess_id = store.create_session()
+    sess = store.get_session(sess_id)
+    assert sess is not None
+    assert sess["id"] == sess_id
+    assert sess["title"] == "Cuộc trò chuyện mới"
+
+
+def test_create_session_custom_id(store):
+    custom_id = "custom-session-uuid-1234"
+    returned_id = store.create_session(session_id=custom_id, title="Custom Session")
+    assert returned_id == custom_id
+    sess = store.get_session(custom_id)
+    assert sess is not None
+    assert sess["title"] == "Custom Session"
+
+
+def test_get_session_not_found(store):
+    assert store.get_session("non-existent-session-id") is None
+
+
+def test_add_and_get_messages_sliding_window(store):
+    sess_id = store.create_session(title="Test Messages")
+    for i in range(15):
+        role = "user" if i % 2 == 0 else "assistant"
+        store.add_message(sess_id, role=role, content=f"Message {i}")
+
+    recent = store.get_recent_messages(sess_id, limit=10)
+    assert len(recent) == 10
+    assert recent[0]["content"] == "Message 5"
+    assert recent[-1]["content"] == "Message 14"
+
+
+def test_add_message_with_metadata(store):
+    sess_id = store.create_session(title="Metadata Session")
+    msg_id = store.add_message(
+        session_id=sess_id,
+        role="assistant",
+        content="Độ nhớt động lực học là 0.001 Pa.s",
+        standalone_question="Độ nhớt động lực học của nước ở 20 độ C là bao nhiêu?",
+        citations=[{"doc_name": "tcvn_pump.pdf", "page_number": 12}],
+        reasoning_steps=["Tra bảng 2 tiêu chuẩn TCVN", "Lấy giá trị tại 20°C"],
+    )
+    assert isinstance(msg_id, str) and len(msg_id) > 0
+
+    messages = store.get_recent_messages(sess_id, limit=5)
+    assert len(messages) == 1
+    msg = messages[0]
+    assert msg["id"] == msg_id
+    assert msg["role"] == "assistant"
+    assert msg["content"] == "Độ nhớt động lực học là 0.001 Pa.s"
+    assert msg["standalone_question"] == "Độ nhớt động lực học của nước ở 20 độ C là bao nhiêu?"
+    assert msg["citations"] == [{"doc_name": "tcvn_pump.pdf", "page_number": 12}]
+    assert msg["reasoning_steps"] == ["Tra bảng 2 tiêu chuẩn TCVN", "Lấy giá trị tại 20°C"]
+
+
+def test_list_sessions(store):
+    store.create_session(session_id="s1", title="Session 1")
+    store.create_session(session_id="s2", title="Session 2")
+    sessions = store.list_sessions(limit=10)
+    assert len(sessions) == 2
+    session_ids = [s["id"] for s in sessions]
+    assert "s1" in session_ids
+    assert "s2" in session_ids
+
+
+def test_delete_session_cascades_messages(store):
+    sess_id = store.create_session(title="To Delete")
+    store.add_message(sess_id, role="user", content="Hello")
+    assert store.delete_session(sess_id) is True
+    assert store.get_session(sess_id) is None
+    assert len(store.get_recent_messages(sess_id, limit=10)) == 0
+
+
+def test_delete_non_existent_session(store):
+    assert store.delete_session("does-not-exist") is False
