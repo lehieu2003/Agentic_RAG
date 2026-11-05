@@ -233,7 +233,7 @@ Trong đó $k = 60$, $r_m(d)$ là thứ hạng của tài liệu $d$ trong danh 
 
 ## 6. Động cơ Agentic RAG (LangGraph State Machine)
 
-Toàn bộ quy trình suy luận và kiểm định phản hồi được đóng gói trong một đồ thị trạng thái khép kín ([`AgentState`](file:///Users/lehieu/Projects/personal/Agentic_RAG/src/rag/agent.py)) với **9 bước được đánh số**:
+Toàn bộ quy trình suy luận và kiểm định phản hồi được đóng gói trong một đồ thị trạng thái khép kín ([`AgentState`](file:///Users/lehieu/Projects/personal/Agentic_RAG/src/rag/state.py)) với **9 bước được đánh số**:
 
 ```mermaid
 stateGraph-v2
