@@ -13,7 +13,7 @@ describe('App Split-Screen Workspace Integration', () => {
       if (url.includes('/api/v1/health')) {
         return Promise.resolve({
           ok: true,
-          json: async () => ({ status: 'healthy', vector_store_count: 10 }),
+          json: async () => ({ status: 'ok', vector_store_count: 10 }),
         });
       }
       if (url.includes('/api/v1/files')) {
@@ -177,7 +177,7 @@ describe('App Split-Screen Workspace Integration', () => {
       if (url.includes('/api/v1/health')) {
         return Promise.resolve({
           ok: true,
-          json: async () => ({ status: 'healthy', vector_store_count: 10 }),
+          json: async () => ({ status: 'ok', vector_store_count: 10 }),
         });
       }
       if (url.includes('/api/v1/files')) {
@@ -249,7 +249,7 @@ describe('App Split-Screen Workspace Integration', () => {
       if (url.includes('/api/v1/health')) {
         return Promise.resolve({
           ok: true,
-          json: async () => ({ status: 'healthy', vector_store_count: 10 }),
+          json: async () => ({ status: 'ok', vector_store_count: 10 }),
         });
       }
       if (url.includes('/api/v1/files')) {
@@ -287,7 +287,7 @@ describe('App Split-Screen Workspace Integration', () => {
       if (url.includes('/api/v1/health')) {
         return Promise.resolve({
           ok: true,
-          json: async () => ({ status: 'healthy', vector_store_count: 10 }),
+          json: async () => ({ status: 'ok', vector_store_count: 10 }),
         });
       }
       if (url.includes('/api/v1/files')) {
@@ -325,7 +325,7 @@ describe('App Split-Screen Workspace Integration', () => {
       if (url.includes('/api/v1/health')) {
         return Promise.resolve({
           ok: true,
-          json: async () => ({ status: 'healthy', vector_store_count: 10 }),
+          json: async () => ({ status: 'ok', vector_store_count: 10 }),
         });
       }
       if (url.includes('/api/v1/files')) {

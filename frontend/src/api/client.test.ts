@@ -21,11 +21,11 @@ describe('ApiClient Service', () => {
   it('checkHealth returns backend status', async () => {
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({ status: 'healthy', vector_store_count: 42 }),
+      json: async () => ({ status: 'ok', vector_store_count: 42 }),
     } as Response);
 
     const res = await checkHealth();
-    expect(res.status).toBe('healthy');
+    expect(res.status).toBe('ok');
     expect(res.vector_store_count).toBe(42);
     expect(globalThis.fetch).toHaveBeenCalledWith('/api/v1/health');
   });

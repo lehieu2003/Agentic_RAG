@@ -27,6 +27,8 @@ def test_health_endpoint(client):
     response = client.get("/api/v1/health")
     assert response.status_code == 200
     assert response.json()["status"] == "ok"
+    count = response.json()["vector_store_count"]
+    assert count is None or (isinstance(count, int) and count >= 0)
 
 def test_upload_endpoint(client):
     doc = pymupdf.open()

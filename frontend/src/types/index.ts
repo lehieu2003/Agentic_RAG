@@ -5,7 +5,7 @@
 
 export interface HealthResponse {
   status: string;
-  vector_store_count?: number;
+  vector_store_count?: number | null;
   app_name?: string;
   retrieval_mode?: string;
   vector_store?: string;
