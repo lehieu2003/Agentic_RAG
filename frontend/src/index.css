@@ -4,58 +4,195 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Theme palette (generated from tailwindcss/colors).
+ * Components use plain Tailwind classes (zinc-*, white/*, sky-*...). Light mode
+ * mirrors every scale (shade s -> 1000-s) so dark-first classes keep their
+ * contrast relationships without per-component dark:/light: variants. */
 :root {
   color-scheme: dark;
-  --bg-canvas: #09090b;
-  --bg-surface: rgba(18, 18, 21, 0.75);
-  --bg-elevated: rgba(24, 24, 27, 0.85);
-  --border-subtle: rgba(255, 255, 255, 0.08);
-  --border-focus: #38bdf8;
-  --text-primary: #f4f4f5;
-  --text-muted: #a1a1aa;
-  --accent-sky: #38bdf8;
-  --accent-emerald: #10b981;
-  --accent-violet: #a855f7;
+  --shadow-alpha: 0.5;
+  --c-zinc-50: 250 250 250;
+  --c-zinc-100: 244 244 245;
+  --c-zinc-200: 228 228 231;
+  --c-zinc-300: 212 212 216;
+  --c-zinc-400: 161 161 170;
+  --c-zinc-500: 113 113 122;
+  --c-zinc-600: 82 82 91;
+  --c-zinc-700: 63 63 70;
+  --c-zinc-800: 39 39 42;
+  --c-zinc-900: 24 24 27;
+  --c-zinc-950: 9 9 11;
+  --c-sky-50: 240 249 255;
+  --c-sky-100: 224 242 254;
+  --c-sky-200: 186 230 253;
+  --c-sky-300: 125 211 252;
+  --c-sky-400: 56 189 248;
+  --c-sky-500: 14 165 233;
+  --c-sky-600: 2 132 199;
+  --c-sky-700: 3 105 161;
+  --c-sky-800: 7 89 133;
+  --c-sky-900: 12 74 110;
+  --c-sky-950: 8 47 73;
+  --c-emerald-50: 236 253 245;
+  --c-emerald-100: 209 250 229;
+  --c-emerald-200: 167 243 208;
+  --c-emerald-300: 110 231 183;
+  --c-emerald-400: 52 211 153;
+  --c-emerald-500: 16 185 129;
+  --c-emerald-600: 5 150 105;
+  --c-emerald-700: 4 120 87;
+  --c-emerald-800: 6 95 70;
+  --c-emerald-900: 6 78 59;
+  --c-emerald-950: 2 44 34;
+  --c-rose-50: 255 241 242;
+  --c-rose-100: 255 228 230;
+  --c-rose-200: 254 205 211;
+  --c-rose-300: 253 164 175;
+  --c-rose-400: 251 113 133;
+  --c-rose-500: 244 63 94;
+  --c-rose-600: 225 29 72;
+  --c-rose-700: 190 18 60;
+  --c-rose-800: 159 18 57;
+  --c-rose-900: 136 19 55;
+  --c-rose-950: 76 5 25;
+  --c-amber-50: 255 251 235;
+  --c-amber-100: 254 243 199;
+  --c-amber-200: 253 230 138;
+  --c-amber-300: 252 211 77;
+  --c-amber-400: 251 191 36;
+  --c-amber-500: 245 158 11;
+  --c-amber-600: 217 119 6;
+  --c-amber-700: 180 83 9;
+  --c-amber-800: 146 64 14;
+  --c-amber-900: 120 53 15;
+  --c-amber-950: 69 26 3;
+  --c-violet-50: 245 243 255;
+  --c-violet-100: 237 233 254;
+  --c-violet-200: 221 214 254;
+  --c-violet-300: 196 181 253;
+  --c-violet-400: 167 139 250;
+  --c-violet-500: 139 92 246;
+  --c-violet-600: 124 58 237;
+  --c-violet-700: 109 40 217;
+  --c-violet-800: 91 33 182;
+  --c-violet-900: 76 29 149;
+  --c-violet-950: 46 16 101;
+  --c-white: 255 255 255;
+  --c-canvas: 9 9 11;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --shadow-alpha: 0.08;
+  --c-zinc-50: 9 9 11;
+  --c-zinc-100: 24 24 27;
+  --c-zinc-200: 39 39 42;
+  --c-zinc-300: 63 63 70;
+  --c-zinc-400: 82 82 91;
+  --c-zinc-500: 113 113 122;
+  --c-zinc-600: 161 161 170;
+  --c-zinc-700: 212 212 216;
+  --c-zinc-800: 228 228 231;
+  --c-zinc-900: 244 244 245;
+  --c-zinc-950: 250 250 250;
+  --c-sky-50: 8 47 73;
+  --c-sky-100: 12 74 110;
+  --c-sky-200: 7 89 133;
+  --c-sky-300: 3 105 161;
+  --c-sky-400: 2 132 199;
+  --c-sky-500: 14 165 233;
+  --c-sky-600: 56 189 248;
+  --c-sky-700: 125 211 252;
+  --c-sky-800: 186 230 253;
+  --c-sky-900: 224 242 254;
+  --c-sky-950: 240 249 255;
+  --c-emerald-50: 2 44 34;
+  --c-emerald-100: 6 78 59;
+  --c-emerald-200: 6 95 70;
+  --c-emerald-300: 4 120 87;
+  --c-emerald-400: 5 150 105;
+  --c-emerald-500: 16 185 129;
+  --c-emerald-600: 52 211 153;
+  --c-emerald-700: 110 231 183;
+  --c-emerald-800: 167 243 208;
+  --c-emerald-900: 209 250 229;
+  --c-emerald-950: 236 253 245;
+  --c-rose-50: 76 5 25;
+  --c-rose-100: 136 19 55;
+  --c-rose-200: 159 18 57;
+  --c-rose-300: 190 18 60;
+  --c-rose-400: 225 29 72;
+  --c-rose-500: 244 63 94;
+  --c-rose-600: 251 113 133;
+  --c-rose-700: 253 164 175;
+  --c-rose-800: 254 205 211;
+  --c-rose-900: 255 228 230;
+  --c-rose-950: 255 241 242;
+  --c-amber-50: 69 26 3;
+  --c-amber-100: 120 53 15;
+  --c-amber-200: 146 64 14;
+  --c-amber-300: 180 83 9;
+  --c-amber-400: 217 119 6;
+  --c-amber-500: 245 158 11;
+  --c-amber-600: 251 191 36;
+  --c-amber-700: 252 211 77;
+  --c-amber-800: 253 230 138;
+  --c-amber-900: 254 243 199;
+  --c-amber-950: 255 251 235;
+  --c-violet-50: 46 16 101;
+  --c-violet-100: 76 29 149;
+  --c-violet-200: 91 33 182;
+  --c-violet-300: 109 40 217;
+  --c-violet-400: 124 58 237;
+  --c-violet-500: 139 92 246;
+  --c-violet-600: 167 139 250;
+  --c-violet-700: 196 181 253;
+  --c-violet-800: 221 214 254;
+  --c-violet-900: 237 233 254;
+  --c-violet-950: 245 243 255;
+  --c-white: 9 9 11;
+  --c-canvas: 255 255 255;
 }
 
 body {
   margin: 0;
-  background-color: #09090b;
-  color: #e4e4e7;
+  background-color: rgb(var(--c-canvas));
+  color: rgb(var(--c-zinc-200));
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  transition: background-color 150ms ease, color 150ms ease;
 }
 
 ::selection {
-  background-color: rgba(56, 189, 248, 0.3);
-  color: #ffffff;
+  background-color: rgb(var(--c-sky-400) / 0.3);
+  color: rgb(var(--c-white));
 }
 
 /* UI/UX Pro Max: Keyboard navigation visible focus */
 :focus-visible {
-  outline: 2px solid #38bdf8;
+  outline: 2px solid rgb(var(--c-sky-400));
   outline-offset: 2px;
 }
 
-/* UI/UX Pro Max: Ultra-thin custom scrollbar for dark mode */
+/* UI/UX Pro Max: Ultra-thin custom scrollbar (theme-aware) */
 ::-webkit-scrollbar {
   width: 5px;
   height: 5px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #09090b;
+  background: rgb(var(--c-canvas));
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #27272a;
+  background: rgb(var(--c-zinc-800));
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #3f3f46;
+  background: rgb(var(--c-zinc-700));
 }
 
 /* KaTeX and math typography polish */

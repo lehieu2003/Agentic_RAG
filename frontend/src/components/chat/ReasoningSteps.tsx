@@ -129,7 +129,7 @@ export const ReasoningSteps: React.FC<ReasoningStepsProps> = ({
                     </p>
                   )}
                   {step.details && (
-                    <p className="text-zinc-500 text-[10.5px] mt-1 font-mono bg-black/40 p-2 rounded-lg border border-white/[0.04] whitespace-pre-wrap break-all">
+                    <p className="text-zinc-500 text-[10.5px] mt-1 font-mono bg-zinc-950/50 p-2 rounded-lg border border-white/[0.04] whitespace-pre-wrap break-all">
                       {step.details}
                     </p>
                   )}

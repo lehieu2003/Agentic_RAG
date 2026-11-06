@@ -119,7 +119,7 @@ export const EvidenceExpander: React.FC<EvidenceExpanderProps> = ({
                 </div>
 
                 {text && (
-                  <p className="text-zinc-400 text-xs leading-relaxed bg-black/30 p-2.5 rounded-lg border border-white/[0.04] font-sans whitespace-pre-wrap">
+                  <p className="text-zinc-400 text-xs leading-relaxed bg-zinc-950/40 p-2.5 rounded-lg border border-white/[0.04] font-sans whitespace-pre-wrap">
                     {text}
                   </p>
                 )}

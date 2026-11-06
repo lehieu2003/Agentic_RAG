@@ -11,7 +11,7 @@ describe('Header Component', () => {
         onToggleViewer={vi.fn()}
         isSidebarOpen={true}
         onToggleSidebar={onToggleSidebar}
-        health={{ status: 'healthy', vector_store_count: 5 }}
+        health={{ status: 'ok', vector_store_count: 5 }}
       />
     );
     expect(screen.getByText(/Document Intelligence/i)).toBeInTheDocument();
@@ -29,7 +29,7 @@ describe('Header Component', () => {
         onToggleViewer={onToggleViewer}
         isSidebarOpen={false}
         onToggleSidebar={vi.fn()}
-        health={{ status: 'healthy', vector_store_count: 10 }}
+        health={{ status: 'ok', vector_store_count: 10 }}
       />
     );
     fireEvent.click(screen.getByLabelText(/toggle document viewer/i));
@@ -67,9 +67,30 @@ describe('Header Component', () => {
         onToggleViewer={vi.fn()}
         isSidebarOpen={false}
         onToggleSidebar={vi.fn()}
-        health={{ status: 'healthy', vector_store_count: 12500 }}
+        health={{ status: 'ok', vector_store_count: 12500 }}
       />
     );
     expect(screen.getByText(new RegExp(`${(12500).toLocaleString()} chunks`))).toBeInTheDocument();
+  });
+
+  it('toggles between dark and light theme and remembers the choice', () => {
+    localStorage.removeItem('theme');
+    document.documentElement.dataset.theme = 'dark';
+    render(
+      <Header
+        isViewerOpen={false}
+        onToggleViewer={vi.fn()}
+        isSidebarOpen={false}
+        onToggleSidebar={vi.fn()}
+        health={null}
+      />
+    );
+    fireEvent.click(screen.getByLabelText('Chuyển sang giao diện sáng'));
+    expect(document.documentElement.dataset.theme).toBe('light');
+    expect(localStorage.getItem('theme')).toBe('light');
+
+    fireEvent.click(screen.getByLabelText('Chuyển sang giao diện tối'));
+    expect(document.documentElement.dataset.theme).toBe('dark');
+    expect(localStorage.getItem('theme')).toBe('dark');
   });
 });

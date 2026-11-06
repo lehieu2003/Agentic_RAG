@@ -1,6 +1,7 @@
 import React from 'react';
-import { PanelLeft, PanelRight, Sparkles } from 'lucide-react';
+import { Moon, PanelLeft, PanelRight, Sparkles, Sun } from 'lucide-react';
 import type { HealthResponse } from '../../types';
+import { useTheme } from '../../hooks/useTheme';
 
 export interface HeaderProps {
   isViewerOpen: boolean;
@@ -17,9 +18,11 @@ export const Header: React.FC<HeaderProps> = ({
   onToggleSidebar,
   health,
 }) => {
-  const isHealthy = health?.status === 'healthy';
+  const isHealthy = health?.status === 'ok';
   const isConnecting = health === null;
   const chunkCount = health?.vector_store_count ?? 0;
+  const { theme, toggleTheme } = useTheme();
+  const isLight = theme === 'light';
 
   return (
     <header className="h-[52px] sticky top-0 bg-zinc-950/80 backdrop-blur-md border-b border-white/[0.06] px-4 flex items-center justify-between select-none z-10 shrink-0">
@@ -74,6 +77,18 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
           )}
         </div>
+
+        {/* Theme Toggle */}
+        <button
+          type="button"
+          onClick={toggleTheme}
+          aria-label={isLight ? 'Chuyển sang giao diện tối' : 'Chuyển sang giao diện sáng'}
+          aria-pressed={isLight}
+          className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/[0.06] border border-transparent hover:border-white/[0.08] transition-colors focus:outline-none focus:ring-1 focus:ring-sky-500/50"
+          title={isLight ? 'Giao diện tối' : 'Giao diện sáng'}
+        >
+          {isLight ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
+        </button>
 
         {/* Toggle Viewer Button */}
         <button

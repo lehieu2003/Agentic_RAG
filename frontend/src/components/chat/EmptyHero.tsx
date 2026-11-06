@@ -69,7 +69,7 @@ export const EmptyHero: React.FC<EmptyHeroProps> = ({
               key={idx}
               type="button"
               onClick={() => onSelectPrompt(item.prompt)}
-              className="bg-zinc-900/60 hover:bg-zinc-900/90 border border-white/[0.08] hover:border-sky-500/40 rounded-xl p-4 transition-all duration-200 shadow-sm hover:shadow-[0_8px_24px_rgba(0,0,0,0.5)] group text-left cursor-pointer flex flex-col justify-between relative overflow-hidden"
+              className="bg-zinc-900/60 hover:bg-zinc-900/90 border border-white/[0.08] hover:border-sky-500/40 rounded-xl p-4 transition-all duration-200 shadow-sm hover:shadow-[0_8px_24px_rgb(0_0_0/var(--shadow-alpha))] group text-left cursor-pointer flex flex-col justify-between relative overflow-hidden"
             >
               <div>
                 <div className="flex items-center justify-between mb-2.5">

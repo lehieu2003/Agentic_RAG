@@ -1,3 +1,9 @@
+const SHADES = ['50', '100', '200', '300', '400', '500', '600', '700', '800', '900', '950'];
+
+/** Palette whose shades resolve to CSS variables swapped by [data-theme] (see index.css). */
+const themed = (name) =>
+  Object.fromEntries(SHADES.map((s) => [s, `rgb(var(--c-${name}-${s}) / <alpha-value>)`]));
+
 /** @type {import('tailwindcss').Config} */
 export default {
   content: [
@@ -11,7 +17,14 @@ export default {
         mono: ['JetBrains Mono', 'ui-monospace', 'monospace'],
       },
       colors: {
-        canvas: '#09090b',
+        zinc: themed('zinc'),
+        sky: themed('sky'),
+        emerald: themed('emerald'),
+        rose: themed('rose'),
+        amber: themed('amber'),
+        violet: themed('violet'),
+        white: 'rgb(var(--c-white) / <alpha-value>)',
+        canvas: 'rgb(var(--c-canvas) / <alpha-value>)',
         surface: {
           DEFAULT: '#121215',
           elevated: '#18181b',

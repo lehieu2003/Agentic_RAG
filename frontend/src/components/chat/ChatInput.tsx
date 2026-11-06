@@ -55,7 +55,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
   return (
     <div className={`w-full max-w-4xl mx-auto px-4 ${className}`}>
-      <div className="relative rounded-2xl bg-zinc-900/85 backdrop-blur-xl border border-white/[0.1] focus-within:border-sky-500/60 shadow-[0_8px_32px_rgba(0,0,0,0.5)] transition-all duration-200">
+      <div className="relative rounded-2xl bg-zinc-900/85 backdrop-blur-xl border border-white/[0.1] focus-within:border-sky-500/60 shadow-[0_8px_32px_rgb(0_0_0/var(--shadow-alpha))] transition-all duration-200">
         <textarea
           ref={textareaRef}
           rows={1}
