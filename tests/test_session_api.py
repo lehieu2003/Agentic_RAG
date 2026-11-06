@@ -17,8 +17,9 @@ def isolated_upload_dir(tmp_path_factory):
 @pytest.fixture(scope="module")
 def client(tmp_path_factory):
     db_path = str(tmp_path_factory.mktemp("db") / "api_test_chat.db")
-    app.state.session_store = SessionStore(db_path=db_path)
     with TestClient(app) as test_client:
+        # Assign after startup: the lifespan replaces app.state.session_store.
+        app.state.session_store = SessionStore(db_path=db_path)
         yield test_client
 
 
@@ -151,3 +152,10 @@ def test_batch_delete_sessions_api(client):
     assert client.get("/api/v1/sessions/batch-3").status_code == 404
     assert client.get("/api/v1/sessions/batch-2").status_code == 200
 
+
+
+def test_tests_never_use_real_chat_history(client):
+    from pathlib import Path
+    real = Path("data/chat_history.db").resolve()
+    assert Path(settings.session_db_path).resolve() != real
+    assert Path(app.state.session_store.db_path).resolve() != real

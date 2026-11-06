@@ -9,6 +9,7 @@ class Settings(BaseSettings):
 
     app_name: str = "Document Q&A Assistant"
     upload_dir: str = "data/uploads"
+    session_db_path: str = "data/chat_history.db"
     qdrant_path: str = "data/qdrant_storage"
     qdrant_collection: str = "technical_documents"
     qdrant_url: str = ""

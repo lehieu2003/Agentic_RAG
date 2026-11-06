@@ -188,7 +188,7 @@ async def lifespan(app: FastAPI):
     )
 
     # 5. Session Store for multi-turn conversation memory
-    app.state.session_store = SessionStore()
+    app.state.session_store = SessionStore(db_path=settings.session_db_path)
 
     try:
         yield
