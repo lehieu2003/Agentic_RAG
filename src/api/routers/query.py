@@ -71,7 +71,7 @@ def query_assistant(
 
     # 4. Invoke agent with conversation history
     try:
-        response = agent.answer(qa_request.question, top_k=qa_request.top_k, history=recent_messages)
+        response = agent.answer(qa_request.question, top_k=qa_request.top_k or settings.rerank_top_k, history=recent_messages)
     except Exception as e:
         raise HTTPException(status_code=503, detail=f"Retrieval failure: {str(e)}")
 

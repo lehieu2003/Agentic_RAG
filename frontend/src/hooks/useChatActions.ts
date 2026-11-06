@@ -11,7 +11,6 @@ import { parseReasoningStep } from '../utils/reasoning';
 import { clearStoredSessionId, mapSessionMessages, storeSessionId } from '../utils/sessionMessages';
 
 interface ChatActionsParams {
-  topK: number;
   currentSessionId: string | null;
   isQuerying: boolean;
   lastQuestion: string;
@@ -35,7 +34,6 @@ export interface ChatActions {
  * loading an existing session's history.
  */
 export function useChatActions({
-  topK,
   currentSessionId,
   isQuerying,
   lastQuestion,
@@ -63,7 +61,7 @@ export function useChatActions({
       setLastQuestion(trimmed);
 
       try {
-        const res: QAResponse = await askQuestion(trimmed, topK, currentSessionId);
+        const res: QAResponse = await askQuestion(trimmed, currentSessionId);
         const reasoningSteps: ReasoningStep[] | undefined = Array.isArray(res.reasoning_steps)
           ? res.reasoning_steps.map(parseReasoningStep)
           : undefined;
@@ -106,7 +104,6 @@ export function useChatActions({
       }
     },
     [
-      topK,
       currentSessionId,
       isQuerying,
       setMessages,

@@ -11,8 +11,6 @@ export default function App() {
     files,
     sessions,
     currentSessionId,
-    topK,
-    setTopK,
     isSidebarOpen,
     setIsSidebarOpen,
     isViewerOpen,
@@ -54,8 +52,6 @@ export default function App() {
           isOpen={isSidebarOpen}
           onClose={() => setIsSidebarOpen(false)}
           files={files}
-          topK={topK}
-          onTopKChange={setTopK}
           onNewChat={handleNewChat}
           onFileUpload={handleFileUpload}
           onDeleteFile={handleDeleteFile}

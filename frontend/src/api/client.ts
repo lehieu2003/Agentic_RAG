@@ -93,7 +93,6 @@ export async function deleteDocument(
  */
 export async function askQuestion(
   question: string,
-  topK: number = 8,
   sessionId?: string | null
 ): Promise<QAResponse> {
   const res = await fetch(`${API_BASE}/query`, {
@@ -103,7 +102,6 @@ export async function askQuestion(
     },
     body: JSON.stringify({
       question,
-      top_k: topK,
       session_id: sessionId || undefined,
     }),
   });

@@ -63,6 +63,19 @@ def test_query_endpoint_structure(client):
         assert "citations" in data
         assert "abstained" in data
 
+def test_query_without_top_k_uses_system_default(client):
+    from src.config import settings
+    from src.models import QAResponse
+    mock_result = QAResponse(answer="ok", citations=[], abstained=True)
+    with patch.object(app.state.agent, "answer", return_value=mock_result) as answer:
+        response = client.post("/api/v1/query", json={"question": "Kiem tra ap suat may bom?"})
+        assert response.status_code == 200
+        assert answer.call_args.kwargs["top_k"] == settings.rerank_top_k
+
+        client.post("/api/v1/query", json={"question": "Kiem tra ap suat may bom?", "top_k": 3})
+        assert answer.call_args.kwargs["top_k"] == 3
+
+
 def test_upload_when_indexing_unsupported_returns_501(client):
     # Mock retriever where index_chunks raises NotImplementedError (like GrpcRetriever)
     mock_retriever = MagicMock(spec=BaseRetriever)

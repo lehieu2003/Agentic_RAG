@@ -13,8 +13,6 @@ export interface Workspace {
   files: FileInfo[];
   sessions: SessionSummary[];
   currentSessionId: string | null;
-  topK: number;
-  setTopK: Dispatch<SetStateAction<number>>;
   isSidebarOpen: boolean;
   setIsSidebarOpen: Dispatch<SetStateAction<boolean>>;
   isViewerOpen: boolean;
@@ -48,7 +46,6 @@ export function useWorkspace(): Workspace {
   const [files, setFiles] = useState<FileInfo[]>([]);
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
-  const [topK, setTopK] = useState<number>(8);
   const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(false);
   const [isViewerOpen, setIsViewerOpen] = useState<boolean>(false);
   const [activeDocument, setActiveDocument] = useState<ActiveDocument | null>(null);
@@ -80,7 +77,6 @@ export function useWorkspace(): Workspace {
   }, []);
 
   const { handleSendMessage, handleRetry, handleNewChat, handleSelectSession } = useChatActions({
-    topK,
     currentSessionId,
     isQuerying,
     lastQuestion,
@@ -125,8 +121,6 @@ export function useWorkspace(): Workspace {
     files,
     sessions,
     currentSessionId,
-    topK,
-    setTopK,
     isSidebarOpen,
     setIsSidebarOpen,
     isViewerOpen,

@@ -156,7 +156,7 @@ Hệ thống tuân thủ kiến trúc Clean / Hexagonal Modular Monorepo kết h
     - **Split-view Document Viewer**: Xem tài liệu PDF/văn bản trực tiếp bên cạnh khung chat; nhấp vào badge trích dẫn sẽ tự động mở panel tài liệu và cuộn đến đúng trang (`#page={page}`).
     - **Interactive Citations & Reasoning Steps**: Badge trích dẫn tương tác một chạm, hộp các bước suy luận Agentic RAG và chi tiết bằng chứng đối sánh (Evidence Chunks với Cosine score) có thể thu gọn/mở rộng.
     - **Render Công thức Toán học LaTeX & Markdown**: Hỗ trợ toàn diện công thức toán học qua KaTeX (`$x$`, `$$x$$`) và định dạng GitHub Flavored Markdown (bảng thông số kỹ thuật, code block, checklist).
-    - **Quản lý tài liệu & Batch Upload**: Kéo thả, tải lên đồng thời nhiều tệp với tiến độ thời gian thực, xóa tài liệu khỏi index/đĩa cứng, điều chỉnh độ sâu `top_k`.
+    - **Quản lý tài liệu & Batch Upload**: Kéo thả, tải lên đồng thời nhiều tệp với tiến độ thời gian thực, xóa tài liệu khỏi index/đĩa cứng. Số đoạn ngữ cảnh đưa vào LLM do hệ thống tự chọn (`RERANK_TOP_K`), người dùng không cần chỉnh.
     - **Thiết kế Responsive**: Tự động co giãn mượt mà trên thiết bị di động, tablet và desktop.
 
 ---
@@ -299,8 +299,7 @@ Gửi câu hỏi tới hệ thống để thực thi quy trình Agentic RAG (Con
 curl -X POST "http://localhost:8000/api/v1/query" \
   -H "Content-Type: application/json" \
   -d '{
-    "question": "Những nguyên nhân nào khiến áp suất đầu ra của máy bơm giảm?",
-    "top_k": 5
+    "question": "Những nguyên nhân nào khiến áp suất đầu ra của máy bơm giảm?"
   }'
 ```
 Phản hồi mẫu:
@@ -343,7 +342,6 @@ curl -X POST "http://localhost:8000/api/v1/query" \
   -H "Content-Type: application/json" \
   -d '{
     "question": "Cách khắc phục nguyên nhân thứ nhất như thế nào?",
-    "top_k": 5,
     "session_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
   }'
 ```

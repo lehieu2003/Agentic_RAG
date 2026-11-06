@@ -23,8 +23,7 @@ describe('Sidebar Component', () => {
         isOpen={true}
         onClose={vi.fn()}
         files={files}
-        topK={8}
-        onTopKChange={vi.fn()}
+        
         onNewChat={vi.fn()}
         onFileUpload={vi.fn()}
         onDeleteFile={onDeleteFile}
@@ -39,24 +38,6 @@ describe('Sidebar Component', () => {
     expect(onDeleteFile).toHaveBeenCalledWith('tài liệu máy bơm.pdf');
   });
 
-  it('handles topK slider change', () => {
-    const onTopKChange = vi.fn();
-    render(
-      <Sidebar
-        isOpen={true}
-        onClose={vi.fn()}
-        files={files}
-        topK={8}
-        onTopKChange={onTopKChange}
-        onNewChat={vi.fn()}
-        onFileUpload={vi.fn()}
-        onDeleteFile={vi.fn()}
-      />
-    );
-    const slider = screen.getByRole('slider');
-    fireEvent.change(slider, { target: { value: '12' } });
-    expect(onTopKChange).toHaveBeenCalledWith(12);
-  });
 
   it('triggers onNewChat when new chat button is clicked', () => {
     const onNewChat = vi.fn();
@@ -65,8 +46,7 @@ describe('Sidebar Component', () => {
         isOpen={true}
         onClose={vi.fn()}
         files={files}
-        topK={8}
-        onTopKChange={vi.fn()}
+        
         onNewChat={onNewChat}
         onFileUpload={vi.fn()}
         onDeleteFile={vi.fn()}
@@ -83,8 +63,7 @@ describe('Sidebar Component', () => {
         isOpen={true}
         onClose={vi.fn()}
         files={files}
-        topK={8}
-        onTopKChange={vi.fn()}
+        
         onNewChat={vi.fn()}
         onFileUpload={onFileUpload}
         onDeleteFile={vi.fn()}
@@ -103,8 +82,7 @@ describe('Sidebar Component', () => {
         isOpen={true}
         onClose={vi.fn()}
         files={files}
-        topK={8}
-        onTopKChange={vi.fn()}
+        
         onNewChat={vi.fn()}
         onFileUpload={onFileUpload}
         onDeleteFile={vi.fn()}
@@ -129,8 +107,7 @@ describe('Sidebar Component', () => {
         isOpen={true}
         onClose={vi.fn()}
         files={[]}
-        topK={8}
-        onTopKChange={vi.fn()}
+        
         onNewChat={vi.fn()}
         onFileUpload={vi.fn()}
         onDeleteFile={vi.fn()}
@@ -145,8 +122,7 @@ describe('Sidebar Component', () => {
         isOpen={false}
         onClose={vi.fn()}
         files={files}
-        topK={8}
-        onTopKChange={vi.fn()}
+        
         onNewChat={vi.fn()}
         onFileUpload={vi.fn()}
         onDeleteFile={vi.fn()}
@@ -161,8 +137,7 @@ describe('Sidebar Component', () => {
         isOpen={true}
         onClose={vi.fn()}
         files={files}
-        topK={8}
-        onTopKChange={vi.fn()}
+        
         onNewChat={vi.fn()}
         onFileUpload={vi.fn()}
         onDeleteFile={vi.fn()}
@@ -179,8 +154,7 @@ describe('Sidebar Component', () => {
         isOpen={true}
         onClose={onClose}
         files={files}
-        topK={8}
-        onTopKChange={vi.fn()}
+        
         onNewChat={vi.fn()}
         onFileUpload={vi.fn()}
         onDeleteFile={vi.fn()}
@@ -198,8 +172,7 @@ describe('Sidebar Component', () => {
         isOpen={true}
         onClose={vi.fn()}
         files={files}
-        topK={8}
-        onTopKChange={vi.fn()}
+        
         onNewChat={vi.fn()}
         onFileUpload={vi.fn()}
         onDeleteFile={onDeleteFile}
@@ -219,8 +192,7 @@ describe('Sidebar Component', () => {
         isOpen={true}
         onClose={vi.fn()}
         files={files}
-        topK={8}
-        onTopKChange={vi.fn()}
+        
         onNewChat={vi.fn()}
         onFileUpload={onFileUpload}
         onDeleteFile={vi.fn()}
@@ -246,8 +218,7 @@ describe('Sidebar Component', () => {
         isOpen={true}
         onClose={vi.fn()}
         files={files}
-        topK={8}
-        onTopKChange={vi.fn()}
+        
         onNewChat={vi.fn()}
         onFileUpload={vi.fn()}
         onDeleteFile={vi.fn()}
@@ -268,8 +239,7 @@ describe('Sidebar Component', () => {
         isOpen={true}
         onClose={vi.fn()}
         files={[]}
-        topK={8}
-        onTopKChange={vi.fn()}
+        
         onNewChat={vi.fn()}
         onFileUpload={vi.fn()}
         onDeleteFile={vi.fn()}
@@ -290,8 +260,7 @@ describe('Sidebar Component', () => {
         isOpen={true}
         onClose={vi.fn()}
         files={[]}
-        topK={8}
-        onTopKChange={vi.fn()}
+        
         onNewChat={vi.fn()}
         onFileUpload={vi.fn()}
         onDeleteFile={vi.fn()}
@@ -309,8 +278,7 @@ describe('Sidebar Component', () => {
         isOpen={true}
         onClose={vi.fn()}
         files={[]}
-        topK={8}
-        onTopKChange={vi.fn()}
+        
         onNewChat={vi.fn()}
         onFileUpload={vi.fn()}
         onDeleteFile={vi.fn()}
@@ -332,8 +300,7 @@ describe('Sidebar Component', () => {
         isOpen={true}
         onClose={vi.fn()}
         files={files}
-        topK={8}
-        onTopKChange={vi.fn()}
+        
         onNewChat={vi.fn()}
         onFileUpload={vi.fn()}
         onDeleteFile={vi.fn()}
@@ -365,8 +332,7 @@ describe('Sidebar Component', () => {
         isOpen={true}
         onClose={vi.fn()}
         files={[]}
-        topK={8}
-        onTopKChange={vi.fn()}
+        
         onNewChat={vi.fn()}
         onFileUpload={vi.fn()}
         onDeleteFile={vi.fn()}
@@ -389,8 +355,7 @@ describe('Sidebar Component', () => {
         isOpen={true}
         onClose={vi.fn()}
         files={[]}
-        topK={8}
-        onTopKChange={vi.fn()}
+        
         onNewChat={vi.fn()}
         onFileUpload={vi.fn()}
         onDeleteFile={vi.fn()}
@@ -418,8 +383,7 @@ describe('Sidebar Component', () => {
         isOpen={true}
         onClose={vi.fn()}
         files={[]}
-        topK={8}
-        onTopKChange={vi.fn()}
+        
         onNewChat={vi.fn()}
         onFileUpload={vi.fn()}
         onDeleteFile={vi.fn()}
@@ -465,8 +429,7 @@ describe('Sidebar Component', () => {
         isOpen={true}
         onClose={vi.fn()}
         files={[]}
-        topK={8}
-        onTopKChange={vi.fn()}
+        
         onNewChat={vi.fn()}
         onFileUpload={vi.fn()}
         onDeleteFile={vi.fn()}

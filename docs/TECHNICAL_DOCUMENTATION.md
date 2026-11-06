@@ -360,10 +360,10 @@ Thực hiện truy vấn câu hỏi qua quy trình Agentic RAG.
 - **Request Body:**
   ```json
   {
-    "question": "Thử nghiệm chấp nhận tính năng thủy lực của bơm cánh quay gồm những cấp nào?",
-    "top_k": 3
+    "question": "Thử nghiệm chấp nhận tính năng thủy lực của bơm cánh quay gồm những cấp nào?"
   }
   ```
+  `top_k` (tùy chọn, nâng cao): số đoạn ngữ cảnh đưa vào LLM sau rerank. Bỏ trống để hệ thống dùng `RERANK_TOP_K` (mặc định 5; câu hỏi dài hơn 250 ký tự tự mở rộng lên 12).
 - **Response Body:**
   ```json
   {

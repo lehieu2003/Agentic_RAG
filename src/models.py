@@ -57,12 +57,15 @@ class QARequest(BaseModel):
         description="Câu hỏi bằng ngôn ngữ tự nhiên về tài liệu kỹ thuật",
         examples=["Nhiệt độ tối đa cho phép của thân bơm là bao nhiêu độ?"]
     )
-    top_k: int = Field(
-        default=5,
+    top_k: Optional[int] = Field(
+        default=None,
         ge=1,
         le=20,
-        description="Số lượng đoạn văn bản liên quan nhất cần truy xuất từ Qdrant",
-        examples=[3]
+        description=(
+            "(Nâng cao) Số đoạn ngữ cảnh đưa vào LLM sau rerank. Bỏ trống để hệ thống tự chọn "
+            "(RERANK_TOP_K; câu hỏi dài sẽ tự mở rộng lên COMPLEX_QUERY_TOP_K)."
+        ),
+        examples=[None]
     )
     session_id: Optional[str] = Field(
         default=None,
@@ -75,7 +78,6 @@ class QARequest(BaseModel):
             "examples": [
                 {
                     "question": "Nhiệt độ tối đa cho phép của thân bơm là bao nhiêu độ?",
-                    "top_k": 3,
                     "session_id": "550e8400-e29b-41d4-a716-446655440000"
                 }
             ]

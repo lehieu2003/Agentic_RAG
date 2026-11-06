@@ -1,13 +1,11 @@
 import React, { useRef, useState } from 'react';
-import { UploadCloud, FileText, Loader2, Database, SlidersHorizontal, Trash2 } from 'lucide-react';
+import { UploadCloud, FileText, Loader2, Database, Trash2 } from 'lucide-react';
 import type { FileInfo } from '../../../types';
 import { formatFileSize, isValidFileExtension } from './utils';
 
 export interface DocumentsPanelProps {
   isActive: boolean;
   files: FileInfo[];
-  topK: number;
-  onTopKChange: (val: number) => void;
   onFileUpload: (file: File) => Promise<void>;
   onDeleteFile: (filename: string) => Promise<void>;
   isUploading?: boolean;
@@ -18,8 +16,6 @@ export interface DocumentsPanelProps {
 const DocumentsPanel: React.FC<DocumentsPanelProps> = ({
   isActive,
   files,
-  topK,
-  onTopKChange,
   onFileUpload,
   onDeleteFile,
   isUploading = false,
@@ -99,35 +95,6 @@ const DocumentsPanel: React.FC<DocumentsPanelProps> = ({
       aria-labelledby="tab-documents"
       className={isActive ? 'flex flex-col flex-1 min-h-0' : 'hidden'}
     >
-      {/* TopK slider section */}
-      <div className="p-3 border-b border-white/[0.06] space-y-2 bg-zinc-900/40 shrink-0">
-        <div className="flex items-center justify-between text-xs">
-          <div className="flex items-center gap-1.5 text-zinc-300 font-medium">
-            <SlidersHorizontal className="w-3.5 h-3.5 text-sky-400" />
-            <span>Độ sâu tìm kiếm</span>
-          </div>
-          <span className="font-mono text-[11px] px-2 py-0.5 rounded-full bg-sky-500/10 text-sky-400 border border-sky-500/20 font-medium">
-            k = {topK}
-          </span>
-        </div>
-
-        <input
-          type="range"
-          min="1"
-          max="20"
-          step="1"
-          value={topK}
-          onChange={(e) => onTopKChange(Number(e.target.value))}
-          aria-label="Search depth topK"
-          className="w-full h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-sky-400 border border-white/[0.06] focus:outline-none"
-        />
-
-        <div className="flex justify-between text-[10px] text-zinc-500 font-mono">
-          <span>1 đoạn</span>
-          <span>20 đoạn</span>
-        </div>
-      </div>
-
       {/* File Dropzone */}
       <div className="p-3 border-b border-white/[0.06] shrink-0">
         <input

@@ -10,8 +10,6 @@ export interface SidebarProps {
   isOpen: boolean;
   onClose: () => void;
   files: FileInfo[];
-  topK: number;
-  onTopKChange: (val: number) => void;
   onNewChat: () => void;
   onFileUpload: (file: File) => Promise<void>;
   onDeleteFile: (filename: string) => Promise<void>;
@@ -30,8 +28,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
   isOpen,
   onClose,
   files,
-  topK,
-  onTopKChange,
   onNewChat,
   onFileUpload,
   onDeleteFile,
@@ -104,8 +100,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <DocumentsPanel
           isActive={activeTab === 'documents'}
           files={files}
-          topK={topK}
-          onTopKChange={onTopKChange}
           onFileUpload={onFileUpload}
           onDeleteFile={onDeleteFile}
           isUploading={isUploading}

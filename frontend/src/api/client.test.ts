@@ -119,7 +119,7 @@ describe('ApiClient Service', () => {
     expect(url).toBe(`/api/v1/files/doc.pdf`);
   });
 
-  it('askQuestion sends question and top_k to /api/v1/query', async () => {
+  it('askQuestion sends only the question to /api/v1/query', async () => {
     const mockQA = {
       answer: 'Reynolds Re = 228,571',
       citations: [{ filename: 'test.pdf', page: 8 }],
@@ -131,13 +131,13 @@ describe('ApiClient Service', () => {
       json: async () => mockQA,
     } as Response);
 
-    const res = await askQuestion('Tính Reynolds', 10);
+    const res = await askQuestion('Tính Reynolds');
     expect(globalThis.fetch).toHaveBeenCalledWith(
       '/api/v1/query',
       expect.objectContaining({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question: 'Tính Reynolds', top_k: 10 }),
+        body: JSON.stringify({ question: 'Tính Reynolds' }),
       })
     );
     expect(res.answer).toBe('Reynolds Re = 228,571');
@@ -146,23 +146,6 @@ describe('ApiClient Service', () => {
     expect(res.citations[0].page).toBe(8);
   });
 
-  it('askQuestion defaults top_k to 8 when not provided', async () => {
-    globalThis.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        answer: 'Test answer',
-        citations: [],
-      }),
-    } as Response);
-
-    await askQuestion('Default top_k test');
-    expect(globalThis.fetch).toHaveBeenCalledWith(
-      '/api/v1/query',
-      expect.objectContaining({
-        body: JSON.stringify({ question: 'Default top_k test', top_k: 8 }),
-      })
-    );
-  });
 
   it('throws friendly error on network failure', async () => {
     globalThis.fetch = vi.fn().mockResolvedValue({
@@ -291,12 +274,12 @@ describe('ApiClient Service', () => {
         }),
       } as Response);
 
-      const res = await askQuestion('Câu hỏi 2', 5, 'sess-123');
+      const res = await askQuestion('Câu hỏi 2', 'sess-123');
       expect(globalThis.fetch).toHaveBeenCalledWith(
         '/api/v1/query',
         expect.objectContaining({
           method: 'POST',
-          body: JSON.stringify({ question: 'Câu hỏi 2', top_k: 5, session_id: 'sess-123' }),
+          body: JSON.stringify({ question: 'Câu hỏi 2', session_id: 'sess-123' }),
         })
       );
       expect(res.session_id).toBe('sess-123');
@@ -312,12 +295,12 @@ describe('ApiClient Service', () => {
         }),
       } as Response);
 
-      await askQuestion('Câu hỏi mới', 8, null);
+      await askQuestion('Câu hỏi mới', null);
       expect(globalThis.fetch).toHaveBeenCalledWith(
         '/api/v1/query',
         expect.objectContaining({
           method: 'POST',
-          body: JSON.stringify({ question: 'Câu hỏi mới', top_k: 8 }),
+          body: JSON.stringify({ question: 'Câu hỏi mới' }),
         })
       );
     });
