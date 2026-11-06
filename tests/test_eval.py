@@ -44,7 +44,7 @@ def test_abstention_metric():
 
 def test_run_benchmark_without_generator():
     retriever = MockRetriever()
-    report = run_benchmark(retriever, ground_truth_file="data/eval/ground_truth.json", k_values=[1, 3])
+    report = run_benchmark(retriever, ground_truth_file="tests/fixtures/sample_ground_truth.json", k_values=[1, 3])
     assert "recall@1" in report
     assert "recall@3" in report
     assert report["abstention_accuracy"] is None
@@ -54,7 +54,7 @@ def test_run_benchmark_without_generator():
 def test_run_benchmark_with_generator():
     retriever = MockRetriever()
     generator = RAGGenerator(provider="mock")
-    report = run_benchmark(retriever, ground_truth_file="data/eval/ground_truth.json", k_values=[1, 3], rag_generator=generator)
+    report = run_benchmark(retriever, ground_truth_file="tests/fixtures/sample_ground_truth.json", k_values=[1, 3], rag_generator=generator)
     assert report["abstention_accuracy"] is not None
     assert "Abstention Accuracy" in report["markdown_report"]
 

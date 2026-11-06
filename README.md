@@ -142,9 +142,10 @@ Hệ thống tuân thủ kiến trúc Clean / Hexagonal Modular Monorepo kết h
    - Khởi động sẽ báo lỗi ngay nếu số chiều collection không khớp model. Sau khi đổi `EMBEDDING_MODEL`, chạy `python scripts/reindex.py --recreate --yes` (hoặc đổi `QDRANT_COLLECTION` sang collection mới rồi chạy `python scripts/reindex.py`). Dùng `--dry-run` để xem trước số chunk.
    - Hỗ trợ kết nối Qdrant Cloud Cluster (`QDRANT_URL`, `QDRANT_API_KEY`) hoặc lưu trữ cục bộ.
 
-9. **Evaluation Suite (Recall@K Benchmark)**:
-   - Bộ dữ liệu Ground Truth kiểm thử 15 câu hỏi kỹ thuật và out-of-scope.
-   - Đo lường tự động: `Recall@1`, `Recall@3`, `Recall@5`, `Recall@10` và `Abstention Accuracy`.
+9. **Evaluation Suite (trên tài liệu thật, không cần ground truth viết tay)**:
+   - **Synthetic QA**: LLM sinh một câu hỏi cho mỗi trang trong `data/uploads/`; trang nguồn chính là nhãn → đo `Recall@K`, `MRR@5` cho từng tầng dense / hybrid / rerank.
+   - **LLM-as-judge**: top-5 của các cấu hình được gộp, xáo trộn và chấm mù 0/1/2 → `precision@5`, `nDCG@5`, `hit@5`, tỷ lệ thắng/thua.
+   - Mỗi cấu hình được index lại riêng trong Qdrant tạm, không đụng collection production.
 
 10. **gRPC Retrieval Service**:
    - Định nghĩa API hợp đồng bằng Protocol Buffers (`proto/retrieval.proto`).
@@ -186,13 +187,17 @@ GRPC_PORT=50051
 UPLOAD_DIR="data/uploads"          # Thư mục lưu trữ tài liệu gốc
 ```
 
-### 3. Chạy Benchmark Evaluation
+### 3. Đánh giá retrieval trên tài liệu thật
 ```bash
-# Chạy benchmark trên collection Qdrant tạm (không đụng index thật)
-python scripts/run_eval.py                      # retrieval + agent (LLM mock)
-python scripts/run_eval.py --no-agent           # chỉ đo retrieval
-python scripts/run_eval.py --provider gemini --output report.json   # agent với LLM thật
+# A. Sinh bộ câu hỏi từ data/uploads -> data/eval/synthetic_qa.json (cần GEMINI_API_KEY)
+python scripts/build_synthetic_qa.py            # --resume để sinh bù trang bị lỗi rate limit
+
+# A + B. So sánh các cấu hình model -> data/eval/reports/compare-<timestamp>.md/.json
+python scripts/compare_models.py                # mặc định: old (MiniLM) vs new (e5)
+python scripts/compare_models.py --no-judge     # chỉ chấm theo nhãn, không gọi LLM
+python scripts/compare_models.py --configs '[{"name":"x","embedding":"...","reranker":"..."}]'
 ```
+Bộ câu hỏi, báo cáo và cache trang (`data/eval/`) chứa trích đoạn tài liệu nên không được commit. Gemini free tier giới hạn 15 request/phút; script tự giới hạn ở `--rpm 14`.
 
 ### 4. Khởi chạy FastAPI Backend
 ```bash
@@ -459,12 +464,16 @@ Khi bạn muốn tách tầng Retrieval thành một process / service độc l�
 
 ## 5. Kết quả đánh giá (Benchmark Results)
 
-Kết quả đo lường thực tế trên bộ dữ liệu kiểm thử `data/eval/ground_truth.json` (số liệu dưới đây đo với cấu hình cũ `all-MiniLM-L6-v2`):
+Đo ngày 2026-11-06 trên tài liệu thật (105 trang, 2 tài liệu), 102 câu hỏi synthetic, pipeline hybrid (dense + BM25, RRF) → rerank top-5:
 
-| Chỉ số | Kết quả đạt được | Mục tiêu đề ra | Đánh giá |
-|---|---|---|---|
-| **Recall@1** | **91.7%** | ≥ 70% | Vượt mục tiêu |
-| **Recall@3** | **91.7%** | ≥ 70% | Vượt mục tiêu |
-| **Recall@5** | **100.0%** | ≥ 70% | Hoàn hảo (12/12 câu in-scope) |
-| **Recall@10** | **100.0%** | ≥ 70% | Hoàn hảo |
-| **Abstention Accuracy** | **100.0%** (Live LLM) | ≥ 90% | Chống hallucination triệt để |
+| Chỉ số (sau rerank) | MiniLM-L6-v2 + bge-reranker-base | **multilingual-e5-large-instruct + bge-reranker-v2-m3** |
+|---|---:|---:|
+| Recall@1 | 34.3% | **60.8%** |
+| Recall@3 | 59.8% | **76.5%** |
+| Recall@5 | 69.6% | **82.4%** |
+| MRR@5 | 0.471 | **0.688** |
+| LLM judge hit@5 (≥1 đoạn trả lời trực tiếp) | 60.8% | **86.3%** |
+| LLM judge nDCG@5 | 0.391 | **0.575** |
+| Thắng / hoà (nDCG@5, 102 câu) | 28 | **65** / 9 hoà |
+| Latency rerank / câu (20 ứng viên, EMBEDDING_DEVICE auto) | ~0.3 s | ~2.1 s |
+

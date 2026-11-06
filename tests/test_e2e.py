@@ -9,7 +9,7 @@ from src.vector_store.qdrant_store import QdrantVectorStore
 from src.eval.runner import run_benchmark
 
 def test_full_pipeline_on_sample_docs(tmp_path):
-    from scripts.generate_sample_docs import generate_sample_documents
+    from tests.fixtures.sample_docs import generate_sample_documents
     generate_sample_documents(output_dir=str(tmp_path))
     pdf_path = str(tmp_path / "pump_maintenance_guide.pdf")
     assert Path(pdf_path).exists(), "Sample doc must exist"
@@ -26,7 +26,7 @@ def test_full_pipeline_on_sample_docs(tmp_path):
     retriever.index_chunks(chunks)
 
     # Benchmark run
-    report = run_benchmark(retriever, ground_truth_file="data/eval/ground_truth.json", k_values=[1, 3, 5])
+    report = run_benchmark(retriever, ground_truth_file="tests/fixtures/sample_ground_truth.json", k_values=[1, 3, 5])
     assert report["recall@5"] >= 0.7
     store.close()
 

@@ -67,7 +67,7 @@ def _aggregate_rows(rows: List[Dict[str, Any]], k_values: List[int]) -> Dict[str
 
 def run_benchmark(
     retriever: BaseRetriever,
-    ground_truth_file: str = "data/eval/ground_truth.json",
+    ground_truth_file: str,
     k_values: Optional[List[int]] = None,
     rag_generator: Optional[RAGGenerator] = None,
     answer_fn: Optional[AnswerFn] = None,
