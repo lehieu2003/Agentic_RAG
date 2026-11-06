@@ -115,3 +115,29 @@ def test_calculation_prompt_guidance():
     assert "HƯỚNG DẪN TÍNH TOÁN KỸ THUẬT" in prompt
     assert "pi*D^2/4" in prompt or "Thế số và tính toán" in prompt
     assert "[Tài liệu: pump.pdf | Trang: 8]" in prompt
+
+
+def test_parse_llm_output_strips_inline_citation_markers():
+    from src.models import DocumentChunk, RetrievalResult
+    gen = RAGGenerator(llm_client=None)
+    chunk = DocumentChunk(chunk_id="c8", doc_name="tài liệu máy bơm.pdf", page_number=8, text="Re = U·D/ν")
+    raw = (
+        "Cần các thông số sau, ngoài $D = 0,15$ m [Tài liệu: tài liệu máy bơm.pdf, Trang 8]:\n"
+        "1. **Vận tốc** $U$ [Tài liệu: tài liệu máy bơm.pdf, Trang 8].\n"
+        "Công thức: $Re = \\frac{U D}{\\nu}$ [tài liệu máy bơm.pdf (Trang 8)]"
+    )
+    resp = gen.parse_llm_output(raw, retrieved_chunks=[RetrievalResult(chunk=chunk, score=0.9)])
+    assert not resp.abstained
+    assert [(c.doc_name, c.page_number) for c in resp.citations] == [("tài liệu máy bơm.pdf", 8)]
+    assert "Trang 8" not in resp.answer
+    assert resp.answer == (
+        "Cần các thông số sau, ngoài $D = 0,15$ m:\n"
+        "1. **Vận tốc** $U$.\n"
+        "Công thức: $Re = \\frac{U D}{\\nu}$"
+    )
+
+
+def test_strip_citation_markers_keeps_non_citation_brackets():
+    gen = RAGGenerator(llm_client=None)
+    text = "Xem [hướng dẫn](https://x.io), mảng [1, 2], công thức \\[a+b\\] và [Trang 4]."
+    assert gen.strip_citation_markers(text) == "Xem [hướng dẫn](https://x.io), mảng [1, 2], công thức \\[a+b\\] và."

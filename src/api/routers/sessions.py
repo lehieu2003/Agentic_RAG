@@ -12,6 +12,7 @@ from src.models import (
     SessionListResponse,
     SessionSummary,
 )
+from src.rag.generator import RAGGenerator
 
 router = APIRouter()
 
@@ -56,7 +57,14 @@ def get_session_detail(request: Request, session_id: str) -> SessionDetailRespon
         raise HTTPException(status_code=404, detail="Session not found")
 
     messages_raw = session_store.get_messages(session_id)
-    messages = [ChatMessage(**m) for m in messages_raw]
+    # Messages saved before inline markers were stripped still contain them.
+    stripper = RAGGenerator(provider="mock")
+    messages = [
+        ChatMessage(**{**m, "content": stripper.strip_citation_markers(m["content"]) or m["content"]})
+        if m.get("role") == "assistant" and m.get("citations")
+        else ChatMessage(**m)
+        for m in messages_raw
+    ]
     return SessionDetailResponse(
         session=SessionSummary(**sess_raw),
         messages=messages,

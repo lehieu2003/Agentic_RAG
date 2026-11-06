@@ -164,12 +164,34 @@ class RAGGenerator:
                 retrieved_chunks=retrieved_chunks
             )
 
+        # Citations are surfaced as a structured list in the UI, so the inline
+        # markers are removed from the displayed answer once validated.
         return QAResponse(
-            answer=raw_clean,
+            answer=self.strip_citation_markers(raw_clean) or raw_clean,
             citations=citations,
             abstained=False,
             retrieved_chunks=retrieved_chunks
         )
+
+    # Bracket not preceded by a backslash (LaTeX \[ \]) and not a Markdown link [x](url).
+    _MARKER_PATTERN = re.compile(r"[ \t]*(?<!\\)\[([^\]\n]+)\](?!\()")
+    _SPACE_BEFORE_PUNCT = re.compile(r"[ \t]+([.,;:!?)])")
+
+    def strip_citation_markers(self, text: str) -> str:
+        """Remove inline citation markers such as ``[Tài liệu: x.pdf, Trang 8]``.
+
+        Only brackets that parse as a citation are removed; other bracketed text,
+        Markdown links, and LaTeX display math are kept intact.
+        """
+        if not text:
+            return text
+
+        def _replace(match: re.Match) -> str:
+            return "" if self.extract_raw_citations(match.group(0).strip()) else match.group(0)
+
+        stripped = self._MARKER_PATTERN.sub(_replace, text)
+        stripped = self._SPACE_BEFORE_PUNCT.sub(r"\1", stripped)
+        return re.sub(r"[ \t]+$", "", stripped, flags=re.MULTILINE).strip()
 
     def generate_answer(
         self,
