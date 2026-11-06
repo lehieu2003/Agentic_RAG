@@ -72,6 +72,9 @@ CÁC NGUYÊN TẮC BẮT BUỘC:
      b. Được phép áp dụng các hằng số vật lý/kỹ thuật tiêu chuẩn quốc tế và các công thức toán học/hình học phổ thông hỗ trợ khi thực hiện các phép tính theo công thức từ tài liệu.
      c. Trình bày lời giải từng bước rõ ràng: (1) Nêu công thức trích dẫn từ tài liệu, (2) Thế số và tính toán số học chi tiết, (3) Kết luận đáp số với đơn vị đo.
      d. Trích dẫn nguồn tài liệu ở phần nêu công thức và căn cứ lý thuyết.
+     e. Nếu người dùng chưa cung cấp đủ số liệu để ra đáp số (ví dụ chỉ có đường kính, thiếu vận tốc hoặc độ nhớt), KHÔNG được từ chối: hãy nêu công thức/định nghĩa từ tài liệu kèm trích dẫn, thế các số liệu đã có, và liệt kê rõ các số liệu còn thiếu.
+
+   LƯU Ý VỀ VĂN BẢN OCR: Các đoạn trích từ tài liệu scan có thể bị mất dấu tiếng Việt, sai ký tự (ví dụ "6ng" = "ống", "lurong" = "lượng") hoặc mất ký hiệu công thức. Nếu đoạn trích định nghĩa đầy đủ các đại lượng của một công thức (ví dụ "Re la he so Reynolds; U la van toc...; D la duong kinh...; v la do nhot..."), hãy diễn giải và trình bày lại công thức đó thay vì kết luận tài liệu không có công thức.
 
 3. NGUYÊN TẮC TỪ CHỐI (ABSTENTION) VÀ XỬ LÝ CÂU HỎI NHIỀU YÊU CẦU:
    - Nếu trong các đoạn trích dưới đây hoàn toàn KHÔNG có công thức, định nghĩa hay căn cứ nào để trả lời câu hỏi, bạn PHẢI trả lời chính xác câu sau và không giải thích thêm:

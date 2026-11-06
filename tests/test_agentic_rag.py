@@ -411,3 +411,44 @@ def test_abstention_when_retries_exhausted_or_invalid_citations_persist():
     assert ABSTAIN_PHRASE in resp.answer
     assert len(resp.citations) == 0
 
+
+
+def test_refusal_on_sufficient_context_retries_with_refusal_directive():
+    """A bare refusal after the grader judged context sufficient is retried with a
+    directive to use the evidence (not a misleading 'missing citation' message)."""
+    mock_retriever = MagicMock(spec=BaseRetriever)
+    mock_llm = MagicMock()
+    chunk = _create_chunk(
+        "pump.pdf", 8, "c8",
+        "He so Reynolds, tinh theo cong thurc (s) V trong do: U la van toc; D la duong kinh; v la do nhot", 0.9,
+    )
+    mock_retriever.search.return_value = [chunk]
+
+    generate_prompts = []
+
+    def mock_generate_content(model: str, contents: str):
+        mock_resp = MagicMock()
+        if contents.startswith("Bạn là trợ lý hỏi đáp tài liệu kỹ thuật"):
+            generate_prompts.append(contents)
+            mock_resp.text = (
+                ABSTAIN_PHRASE if len(generate_prompts) == 1
+                else "Re = U·D/ν [Tài liệu: pump.pdf, Trang 8]; còn thiếu vận tốc U và độ nhớt ν."
+            )
+        elif "phân loại ý định" in contents.lower() or "intent" in contents.lower():
+            mock_resp.text = '{"intent": "TECHNICAL_QUERY", "reply": null}'
+        elif "đánh giá ngữ cảnh" in contents.lower() or "sufficiency" in contents.lower():
+            mock_resp.text = '{"is_sufficient": true, "missing_aspects": ""}'
+        elif "biến thể tìm kiếm" in contents.lower():
+            mock_resp.text = "chuẩn số Reynolds"
+        return mock_resp
+
+    mock_llm.models.generate_content.side_effect = mock_generate_content
+    agent = AgenticRAG(retriever=mock_retriever, llm_client=mock_llm, provider="gemini", max_gen_retries=1)
+    resp = agent.answer("Tính chuẩn số Reynolds cho ống D=150mm", top_k=3)
+
+    assert resp.abstained is False
+    assert [(c.doc_name, c.page_number) for c in resp.citations] == [("pump.pdf", 8)]
+    assert len(generate_prompts) == 2
+    assert "Bạn đã từ chối trả lời" in generate_prompts[1]
+    assert "Thiếu trích dẫn nguồn" not in generate_prompts[1]
+    assert any("Mô hình từ chối dù ngữ cảnh đủ căn cứ" in s for s in resp.reasoning_steps)

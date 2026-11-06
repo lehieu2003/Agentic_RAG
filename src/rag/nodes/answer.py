@@ -12,6 +12,11 @@ from src.rag.state import AgentState
 logger = logging.getLogger(__name__)
 
 
+def _is_refusal(text: str) -> bool:
+    """True when the generation is the bare abstention phrase."""
+    return (text or "").strip().rstrip(".").strip() == ABSTAIN_PHRASE.rstrip(".")
+
+
 class AnswerNodesMixin:
     """Nodes that generate the answer and enforce citation grounding."""
 
@@ -27,12 +32,9 @@ class AnswerNodesMixin:
 
         effective_question = clean_q
         if citation_feedback:
-            directive = (
-                f"Lưu ý từ lần sinh trước: Bạn đã trích dẫn nguồn không hợp lệ hoặc thiếu số trang: {citation_feedback}. "
-                f"Hãy chỉ sử dụng thông tin và số trang có trong các đoạn trích dẫn được cung cấp."
-            )
+            directive = f"Lưu ý từ lần sinh trước: {citation_feedback}"
             effective_question = f"[{directive}]\n\n{clean_q}"
-            steps.append(f"7. generate: Áp dụng chỉ thị điều chỉnh trích dẫn: {citation_feedback}")
+            steps.append(f"7. generate: Áp dụng chỉ thị điều chỉnh: {citation_feedback}")
 
         if self.llm_client is not None:
             prompt = build_rag_prompt(effective_question, context_chunks, history=history)
@@ -77,18 +79,37 @@ class AnswerNodesMixin:
             }
 
         # Citation validation failed
-        if current_gen_retries < self.max_gen_retries:
+        refused = _is_refusal(raw_output)
+        # A refusal on context the grader also judged insufficient is final.
+        worth_retrying = not refused or bool(state.get("is_sufficient"))
+        if worth_retrying and current_gen_retries < self.max_gen_retries:
             matches = self.generator.CITATION_PATTERN.findall(raw_output)
-            if matches:
+            if refused:
+                # The grader judged the context sufficient, so a blanket refusal is
+                # usually the model giving up on noisy OCR text or missing user inputs.
+                feedback = (
+                    "Bạn đã từ chối trả lời, nhưng bước đánh giá ngữ cảnh xác nhận các đoạn trích có căn cứ liên quan. "
+                    "Văn bản có thể là OCR bị mất dấu hoặc mất ký hiệu công thức; hãy suy ra từ định nghĩa các đại lượng. "
+                    "Hãy trình bày định nghĩa/công thức/căn cứ có trong đoạn trích kèm trích dẫn [Tài liệu: ..., Trang ...], "
+                    "và nếu thiếu số liệu đầu vào để tính ra kết quả thì nêu rõ các số liệu còn thiếu. "
+                    "Chỉ từ chối nếu thực sự không có đoạn trích nào liên quan."
+                )
+            elif matches:
                 invalid_sources = [f"{d} trang {p}" for d, p in matches]
-                feedback = f"Trích dẫn không hợp lệ hoặc không có trong tài liệu: {', '.join(invalid_sources)}"
+                feedback = (
+                    f"Trích dẫn không hợp lệ hoặc không có trong tài liệu: {', '.join(invalid_sources)}. "
+                    "Hãy chỉ sử dụng thông tin và số trang có trong các đoạn trích được cung cấp."
+                )
             else:
-                feedback = "Thiếu trích dẫn nguồn theo định dạng [Tài liệu: ..., Trang ...]"
+                feedback = (
+                    "Thiếu trích dẫn nguồn theo định dạng [Tài liệu: ..., Trang ...]. "
+                    "Hãy chỉ sử dụng thông tin và số trang có trong các đoạn trích được cung cấp."
+                )
 
             new_gen_retries = current_gen_retries + 1
+            problem = "Mô hình từ chối dù ngữ cảnh đủ căn cứ" if refused else f"Phát hiện lỗi trích dẫn ({feedback})"
             steps.append(
-                f"8. validate_citations: Phát hiện lỗi trích dẫn ({feedback}). "
-                f"Kích hoạt tự sửa chữa (vòng {new_gen_retries})."
+                f"8. validate_citations: {problem}. Kích hoạt tự sửa chữa (vòng {new_gen_retries})."
             )
             return {
                 "is_citation_valid": False,
