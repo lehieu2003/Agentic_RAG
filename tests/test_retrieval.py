@@ -1,5 +1,4 @@
 # tests/test_retrieval.py
-import pytest
 from src.models import DocumentChunk
 from src.retrieval.base import BaseRetriever
 from src.retrieval.local import LocalRetriever

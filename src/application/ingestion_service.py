@@ -8,7 +8,6 @@ parses requests. All business-rule failures raise
 from datetime import datetime, timezone
 import os
 from pathlib import Path
-import shutil
 from typing import Any, BinaryIO, Dict, List, Optional
 import unicodedata
 import uuid
@@ -19,6 +18,7 @@ from src.domain.exceptions import (
     IndexingNotSupportedError,
     NotFoundError,
     RetrievalError,
+    UploadTooLargeError,
     UnsupportedFileTypeError,
 )
 from src.ingestion.chunker import chunk_document
@@ -113,11 +113,23 @@ class IngestionService:
                 message=f"Tài liệu '{safe_filename}' đã tồn tại trên hệ thống. Bỏ qua nạp trùng lặp."
             )
 
-        # Atomic file write: save to temporary file first, then rename to target_path
+        # Atomic file write: save to temporary file first, then rename to target_path.
+        # The copy is bounded by MAX_UPLOAD_MB so a huge body cannot fill the disk.
+        max_bytes = int(settings.max_upload_mb * 1024 * 1024)
         tmp_target = target_path.with_suffix(f"{ext}.tmp_{uuid.uuid4().hex[:8]}")
         try:
+            written = 0
             with open(tmp_target, "wb") as f:
-                shutil.copyfileobj(fileobj, f)
+                while True:
+                    buffer = fileobj.read(1024 * 1024)
+                    if not buffer:
+                        break
+                    written += len(buffer)
+                    if max_bytes and written > max_bytes:
+                        raise UploadTooLargeError(
+                            f"File '{filename}' exceeds the upload limit of {settings.max_upload_mb:g} MB."
+                        )
+                    f.write(buffer)
             os.replace(tmp_target, target_path)
         except Exception:
             tmp_target.unlink(missing_ok=True)

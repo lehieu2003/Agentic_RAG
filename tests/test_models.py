@@ -1,5 +1,5 @@
 # tests/test_models.py
-from src.models import DocumentChunk, RetrievalResult, Citation, QAResponse
+from src.models import DocumentChunk, Citation, QAResponse
 from src.config import Settings
 
 def test_document_chunk_validation():

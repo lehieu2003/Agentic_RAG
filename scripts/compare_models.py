@@ -228,7 +228,7 @@ def render_markdown(meta, runs, label_summary, judge) -> str:
         ]
         for metric in ("precision@5", "ndcg@5", "hit@5"):
             lines.append(f"| {metric} | " + " | ".join(f"{judge['metrics'][n][metric]:.3f}" for n in names) + " |")
-        lines.append(f"| thắng (nDCG@5) | " + " | ".join(str(judge["wins"][n]) for n in names) + " |")
+        lines.append("| thắng (nDCG@5) | " + " | ".join(str(judge["wins"][n]) for n in names) + " |")
         lines.append(f"| hoà | {judge['ties']} |" + " |" * (len(names) - 1))
     return "\n".join(lines) + "\n"
 

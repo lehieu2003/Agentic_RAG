@@ -6,7 +6,6 @@ the chit-chat, query-processing, and graph-node mixins can share them.
 
 import logging
 import unicodedata
-from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -38,8 +37,10 @@ class AgentBaseMixin:
                     text = response.text or ""
                     if text:
                         return text
-                except Exception:
+                except Exception as e:
+                    logger.debug("Gemini candidate model '%s' failed: %s", m, e)
                     continue
+            logger.warning("All Gemini candidate models %s failed: returning empty response", candidate_models)
             return ""
         elif self.provider == "openai":
             try:
@@ -49,7 +50,8 @@ class AgentBaseMixin:
                     temperature=0.0
                 )
                 return response.choices[0].message.content or ""
-            except Exception:
+            except Exception as e:
+                logger.warning("OpenAI call failed: returning empty response: %s", e)
                 return ""
         elif self.provider == "mock" or (hasattr(self.llm_client, "generate") and callable(self.llm_client.generate)):
             try:

@@ -5,7 +5,7 @@ loading, agent invocation, and message persistence live in one testable
 place, independent of the web framework.
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 from src.domain.exceptions import RetrievalError
 from src.models import QAResponse

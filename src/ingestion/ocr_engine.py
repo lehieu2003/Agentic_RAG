@@ -1,8 +1,5 @@
 """OCR Engine implementation using RapidOCR."""
 
-import io
-from typing import Optional
-from PIL import Image
 from rapidocr_onnxruntime import RapidOCR
 
 

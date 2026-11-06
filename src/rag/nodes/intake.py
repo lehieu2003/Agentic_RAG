@@ -1,5 +1,6 @@
 """Graph nodes 0-2: query contextualization, intent routing, and query expansion."""
 
+import logging
 import re
 from typing import Any, Dict
 
@@ -7,6 +8,8 @@ from langgraph.graph import END
 
 from src.rag.prompt import CONTEXTUALIZE_QUERY_PROMPT
 from src.rag.state import AgentState
+
+logger = logging.getLogger(__name__)
 
 
 class IntakeNodesMixin:

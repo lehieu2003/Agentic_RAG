@@ -2,8 +2,7 @@
 
 import json
 from unittest.mock import MagicMock
-import pytest
-from src.models import Citation, DocumentChunk, RetrievalResult
+from src.models import DocumentChunk, RetrievalResult
 from src.rag.prompt import ABSTAIN_PHRASE
 from src.retrieval.base import BaseRetriever
 from src.rag.agent import AgenticRAG

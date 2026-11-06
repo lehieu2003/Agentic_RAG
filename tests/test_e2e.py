@@ -1,5 +1,4 @@
 # tests/test_e2e.py
-import pytest
 from pathlib import Path
 from src.ingestion.pdf_extractor import extract_pages_from_pdf
 from src.ingestion.chunker import chunk_document

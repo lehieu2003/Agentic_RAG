@@ -52,6 +52,13 @@ class RetrievalError(DomainError):
     default_detail = "Retrieval failure."
 
 
+class UploadTooLargeError(DomainError):
+    """Uploaded file exceeds the configured size limit."""
+
+    status_code = 413
+    default_detail = "Uploaded file is too large."
+
+
 class NotFoundError(DomainError):
     """Requested resource does not exist."""
 

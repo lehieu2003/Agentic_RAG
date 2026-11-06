@@ -1,7 +1,7 @@
 """Hybrid retriever combining dense vector search and sparse BM25 retrieval via Reciprocal Rank Fusion."""
 
 from collections import defaultdict
-from typing import Dict, List, Optional, Set, Union
+from typing import Dict, List, Set, Union
 import logging
 
 from src.models import DocumentChunk, RetrievalResult

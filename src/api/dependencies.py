@@ -16,6 +16,27 @@ from src.rag.agent import AgenticRAG
 from src.storage.session_store import SessionStore
 
 
+def verify_api_key(request: Request) -> None:
+    """Opt-in API-key gate for business routes (no-op while ``API_KEY`` is unset).
+
+    Accepts either an ``X-API-Key`` header or an ``Authorization: Bearer <key>``
+    header so command-line clients work without special tooling.
+    """
+    expected = settings.api_key
+    if not expected:
+        return
+
+    provided = request.headers.get("X-API-Key") or ""
+    if not provided:
+        auth = request.headers.get("Authorization") or ""
+        if auth.startswith("Bearer "):
+            provided = auth[len("Bearer "):]
+
+    import secrets
+    if not provided or not secrets.compare_digest(provided, expected):
+        raise HTTPException(status_code=401, detail="Invalid or missing API key.")
+
+
 def get_session_store(request: Request) -> SessionStore:
     """Return the app-level session store, creating it on first use."""
     session_store = getattr(request.app.state, "session_store", None)

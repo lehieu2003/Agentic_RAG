@@ -1,6 +1,5 @@
 """Tests for Sparse BM25 Retriever."""
 
-import pytest
 from src.models import DocumentChunk
 from src.retrieval.base import BaseRetriever
 from src.retrieval.bm25 import BM25Retriever

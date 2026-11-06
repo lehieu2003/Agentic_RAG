@@ -42,6 +42,17 @@ class Settings(BaseSettings):
     complex_query_top_k: int = 12
     max_citation_page_range: int = 50
 
+    # Security: everything below is opt-in so local development stays open.
+    # Comma-separated origins for CORS; "*" keeps the current allow-all behavior.
+    cors_allow_origins: str = "*"
+    # When set, /api/v1 business routes require the X-API-Key header
+    # (or an "Authorization: Bearer <key>" header) matching this value.
+    api_key: str = ""
+    # Per-file upload cap in megabytes; 0 disables the limit.
+    max_upload_mb: float = 50
+    # Requests per minute per client IP on /api/v1 (0 = disabled).
+    rate_limit_rpm: int = 0
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

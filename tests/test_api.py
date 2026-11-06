@@ -192,3 +192,68 @@ def test_upload_corrupt_docx_returns_400(client):
     assert "Failed to extract text" in data["detail"] or "Corrupted or unreadable document" in data["detail"]
 
 
+def test_health_stays_open_without_api_key(client):
+    # Default configuration: API key disabled, health endpoint open.
+    assert client.get("/api/v1/health").status_code == 200
+
+
+def test_api_key_gate(client, monkeypatch):
+    from src.config import settings as app_settings
+
+    monkeypatch.setattr(app_settings, "api_key", "secret-test-key")
+    try:
+        # No header -> 401 on business routes, health stays open.
+        assert client.post("/api/v1/query", json={"question": "hi"}).status_code == 401
+        assert client.get("/api/v1/health").status_code == 200
+
+        # Wrong key -> 401.
+        assert client.post(
+            "/api/v1/query", json={"question": "hi"}, headers={"X-API-Key": "wrong"}
+        ).status_code == 401
+
+        # Correct key via X-API-Key and via Bearer both pass the gate.
+        ok = client.post("/api/v1/query", json={"question": "hi"}, headers={"X-API-Key": "secret-test-key"})
+        assert ok.status_code != 401
+        ok_bearer = client.post(
+            "/api/v1/query", json={"question": "hi"}, headers={"Authorization": "Bearer secret-test-key"}
+        )
+        assert ok_bearer.status_code != 401
+    finally:
+        monkeypatch.undo()
+
+
+def test_upload_size_limit_returns_413(client, monkeypatch):
+    from src.config import settings as app_settings
+
+    monkeypatch.setattr(app_settings, "max_upload_mb", 0.00001)  # ~10 bytes
+    try:
+        response = client.post(
+            "/api/v1/upload",
+            files={"file": ("too_big.txt", io.BytesIO(b"x" * 2048), "text/plain")}
+        )
+        assert response.status_code == 413
+        assert "exceeds the upload limit" in response.json()["detail"]
+    finally:
+        monkeypatch.undo()
+
+
+def test_rate_limit_middleware_returns_429():
+    # Exercise the middleware on a minimal app; no model loading needed.
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from src.api.rate_limit import RateLimitMiddleware
+
+    probe = FastAPI()
+
+    @probe.get("/ping")
+    def ping():
+        return {"ok": True}
+
+    with TestClient(RateLimitMiddleware(probe, rpm=2)) as test_client:
+        codes = [test_client.get("/ping").status_code for _ in range(4)]
+
+    assert codes[:2] == [200, 200]
+    assert codes[2] == 429
+    assert codes[3] == 429
+
+

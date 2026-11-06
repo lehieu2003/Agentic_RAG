@@ -1,6 +1,6 @@
 """LLM Answer Generator with citation extraction, citation grounding, and abstention enforcement."""
 
-import os
+import logging
 from pathlib import Path
 import re
 from typing import Any, List, Optional
@@ -8,6 +8,8 @@ import unicodedata
 from src.config import settings
 from src.models import Citation, QAResponse, RetrievalResult
 from src.rag.prompt import ABSTAIN_PHRASE, build_rag_prompt
+
+logger = logging.getLogger(__name__)
 
 
 # Bracket not preceded by a backslash (LaTeX \[ \]) and not a Markdown link [x](url).
@@ -276,6 +278,7 @@ class RAGGenerator:
             else:
                 raw_text = ABSTAIN_PHRASE
         except Exception as e:
+            logger.warning("LLM generation failed: %s", e)
             raw_text = f"{ABSTAIN_PHRASE} (Lỗi kết nối LLM: {str(e)})"
 
         return self.parse_llm_output(raw_text, relevant_chunks)

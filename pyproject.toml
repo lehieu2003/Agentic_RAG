@@ -33,12 +33,30 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0.0",
-    "pytest-asyncio>=0.23.0"
+    "pytest-asyncio>=0.23.0",
+    "ruff>=0.4.0"
 ]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py310"
+# Generated protobuf stubs are not hand-maintained.
+extend-exclude = ["src/rpc/retrieval_pb2_grpc.py", "src/rpc/retrieval_pb2.py"]
+
+[tool.ruff.lint]
+# Keep CI focused on real defects (errors, unused/undefined names); broader
+# style sweeps can be enabled incrementally.
+select = ["E4", "E7", "E9", "F"]
+
+[tool.ruff.lint.per-file-ignores]
+# Scripts and test bootstrap import after configuring environment/sys.path.
+"scripts/*" = ["E402"]
+"tests/conftest.py" = ["E402"]
+"src/rpc/__init__.py" = ["E402"]
+"tests/*" = ["E731"]
 
 [tool.setuptools.packages.find]
 where = ["."]

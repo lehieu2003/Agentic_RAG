@@ -147,8 +147,8 @@ class QueryProcessingMixin(AgentBaseMixin):
             if missing_aspect:
                 prompt += f"Khía cạnh còn thiếu hoặc cần bổ sung thông tin: '{missing_aspect}'.\n"
             prompt += (
-                f"Hãy viết lại 2 truy vấn tìm kiếm mới tập trung vào khía cạnh còn thiếu hoặc sử dụng thuật ngữ kỹ thuật chính xác hơn.\n"
-                f"Mỗi truy vấn trên một dòng mới. Không thêm số thứ tự, gạch đầu dòng, hay giải thích."
+                "Hãy viết lại 2 truy vấn tìm kiếm mới tập trung vào khía cạnh còn thiếu hoặc sử dụng thuật ngữ kỹ thuật chính xác hơn.\n"
+                "Mỗi truy vấn trên một dòng mới. Không thêm số thứ tự, gạch đầu dòng, hay giải thích."
             )
             text = self._call_llm(prompt).strip()
             if text:

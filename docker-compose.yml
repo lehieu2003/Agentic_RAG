@@ -1,0 +1,41 @@
+# Production-style local stack: `docker compose up --build`
+#   - api:      FastAPI backend on :8000 (single worker: embedded Qdrant holds
+#               an exclusive file lock; point QDRANT_URL at a Qdrant server to
+#               scale out)
+#   - frontend: nginx serving the built SPA on :8080, proxying /api -> api:8000
+#
+# The first `api` boot downloads the embedding and reranker models (~4 GB)
+# into the rag-data volume, so subsequent starts are fast.
+
+services:
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      UPLOAD_DIR: /data/uploads
+      SESSION_DB_PATH: /data/chat_history.db
+      QDRANT_PATH: /data/qdrant_storage
+      HF_HOME: /data/hf-cache
+      # Hardening knobs (all opt-in; uncomment for real deployments):
+      # CORS_ALLOW_ORIGINS: http://localhost:8080
+      # API_KEY: change-me
+      # MAX_UPLOAD_MB: 50
+      # RATE_LIMIT_RPM: 60
+    env_file:
+      - path: .env
+        required: false   # requires Docker Compose v2.24+
+    volumes:
+      - rag-data:/data
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "8080:80"
+    depends_on:
+      - api
+    restart: unless-stopped
+
+volumes:
+  rag-data:

@@ -2,7 +2,7 @@ import pytest
 from unittest.mock import MagicMock
 from src.rag.agent import AgenticRAG
 from src.models import RetrievalResult, DocumentChunk
-from src.rag.prompt import build_rag_prompt, CONTEXTUALIZE_QUERY_PROMPT
+from src.rag.prompt import build_rag_prompt
 
 
 @pytest.fixture

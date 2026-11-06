@@ -1,11 +1,14 @@
 """Qdrant vector store integration supporting local embedded mode."""
 
+import logging
 import uuid
 from pathlib import Path
 from typing import List, Optional
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, PointStruct, VectorParams
 from src.models import DocumentChunk, RetrievalResult
+
+logger = logging.getLogger(__name__)
 
 
 class QdrantVectorStore:
@@ -40,8 +43,7 @@ class QdrantVectorStore:
                 # falling back to a different local collection.
                 raise
             except Exception as e:
-                import logging
-                logging.getLogger("qdrant_store").warning(
+                logger.warning(
                     "Failed to connect to Qdrant Cloud (%s). Falling back to local embedded storage at '%s'.",
                     e, storage_path
                 )
@@ -65,8 +67,8 @@ class QdrantVectorStore:
             existing = [c.name for c in self.client.get_collections().collections]
             if self.collection_name in existing:
                 self.client.delete_collection(collection_name=self.collection_name)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("Could not delete collection '%s' before rebuild: %s", self.collection_name, e)
 
     def _ensure_collection(self) -> None:
         """Create the collection if needed and fail fast on a dimension mismatch."""
@@ -75,7 +77,8 @@ class QdrantVectorStore:
 
         try:
             existing = [c.name for c in self.client.get_collections().collections]
-        except Exception:
+        except Exception as e:
+            logger.warning("Could not list Qdrant collections to verify readiness: %s", e)
             return
 
         if self.collection_name not in existing:
@@ -108,21 +111,32 @@ class QdrantVectorStore:
         self._collection_ready = True
 
     def get_indexed_doc_names(self) -> set:
-        """Return the set of distinct document names currently indexed."""
+        """Return the set of distinct document names currently indexed.
+
+        Scrolls with the offset cursor so collections beyond a single page
+        (10k+ chunks previously) are fully covered, and fetches only the
+        ``doc_name`` payload field.
+        """
         self._ensure_collection()
+        doc_names: set = set()
         try:
-            points, _ = self.client.scroll(
-                collection_name=self.collection_name,
-                limit=10000,
-                with_payload=True
-            )
-            doc_names = set()
-            for p in points:
-                if p.payload and p.payload.get("doc_name"):
-                    doc_names.add(p.payload["doc_name"])
+            offset = None
+            while True:
+                points, offset = self.client.scroll(
+                    collection_name=self.collection_name,
+                    limit=1000,
+                    offset=offset,
+                    with_payload=["doc_name"],
+                )
+                for p in points:
+                    if p.payload and p.payload.get("doc_name"):
+                        doc_names.add(p.payload["doc_name"])
+                if offset is None:
+                    break
             return doc_names
-        except Exception:
-            return set()
+        except Exception as e:
+            logger.warning("Failed to list indexed documents from Qdrant: %s", e)
+            return doc_names
 
     def delete_by_doc_name(self, doc_name: str) -> int:
         """Delete all vectors and payload matching doc_name (in both NFC and NFD forms)."""
@@ -146,7 +160,8 @@ class QdrantVectorStore:
                 )
             )
             return 1
-        except Exception:
+        except Exception as e:
+            logger.warning("Failed to delete vectors for document '%s': %s", doc_name, e)
             return 0
 
     def upsert_chunks_with_vectors(
@@ -191,7 +206,8 @@ class QdrantVectorStore:
                 limit=top_k,
                 with_payload=True
             )
-        except Exception:
+        except Exception as e:
+            logger.warning("Vector search failed, returning no results: %s", e)
             return []
 
         results: List[RetrievalResult] = []

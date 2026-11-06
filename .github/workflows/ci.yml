@@ -1,0 +1,79 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      # CPU-only torch first: the default PyPI wheel pulls the multi-GB CUDA
+      # stack that the API never uses.
+      - name: Install backend dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install -e ".[dev]"
+
+      - name: Lint (ruff)
+        run: ruff check src tests scripts
+
+      # The test suite pins small cached models and runs with HF_HUB_OFFLINE=1
+      # (tests/conftest.py), so the models must be present before pytest.
+      - name: Cache Hugging Face test models
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface
+          key: hf-models-${{ runner.os }}-minilm-bge-reranker-base
+
+      - name: Pre-download test models
+        run: |
+          python - <<'PY'
+          from huggingface_hub import snapshot_download
+          snapshot_download("sentence-transformers/all-MiniLM-L6-v2")
+          snapshot_download("BAAI/bge-reranker-base")
+          PY
+
+      - name: Run backend tests
+        run: pytest -q
+
+  frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Lint (oxlint)
+        run: npm run lint
+
+      - name: Unit tests (vitest)
+        run: npm run test -- --run
+
+      - name: Type-check and build (tsc + vite)
+        run: npm run build

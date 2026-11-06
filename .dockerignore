@@ -1,0 +1,20 @@
+# Keep the backend build context small: only pyproject.toml, README.md and
+# src/ are COPYed, everything else is excluded from the context transfer.
+.git
+.venv
+venv
+**/__pycache__
+**/*.pyc
+.pytest_cache
+**/.pytest_cache
+*.egg-info
+data
+docs
+tests
+scripts
+frontend
+.zcode
+.superpowers
+agents
+.env
+*.db
