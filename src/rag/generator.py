@@ -10,14 +10,95 @@ from src.models import Citation, QAResponse, RetrievalResult
 from src.rag.prompt import ABSTAIN_PHRASE, build_rag_prompt
 
 
+# Bracket not preceded by a backslash (LaTeX \[ \]) and not a Markdown link [x](url).
+_MARKER_PATTERN = re.compile(r"[ \t]*(?<!\\)\[([^\]\n]+)\](?!\()")
+_SPACE_BEFORE_PUNCT = re.compile(r"[ \t]+([.,;:!?)])")
+
+_CITATION_PATTERN = re.compile(
+    r"\[(?:Tài liệu:\s*|Nguồn:\s*)?([^,\]|\(\)\n]+?)(?:\s*\|\s*|\s*,\s*|\s*-\s*|\s*\(|\s+)Trang(?:\s*:)?\s*(\d+)\)?\]",
+    re.IGNORECASE
+)
+_BRACKET_PATTERN = re.compile(r"\[([^\]\n]+)\]")
+
+
+def extract_raw_citations(text: str, max_page_range: Optional[int] = None) -> List[tuple]:
+    """Extract document names and page numbers from text supporting multiple pages and ranges.
+
+    Supports formats:
+    - [Tài liệu: doc.pdf, Trang 4]
+    - [Tài liệu: doc.pdf, Trang 1, 4]
+    - [Tài liệu: doc.pdf, Trang 1 và 4]
+    - [doc.pdf, Trang 1-3]
+    - [doc.pdf (Trang 5)]
+    - [Nguồn: doc.pdf | Trang: 12]
+    - [Trang 4] (doc_name empty)
+
+    Returns a list of ``(doc_name, page_number)`` tuples.
+    """
+    limit = max_page_range if max_page_range is not None else settings.max_citation_page_range
+    extracted = []
+    for bracket in _BRACKET_PATTERN.findall(text):
+        # Split document name and page part
+        parts = re.split(
+            r"(?:,\s*|\s*\|\s*|\s*-\s*|\s*\()?(?:các\s+)?(?:trang|page)(?:\s*:)?\s*",
+            bracket,
+            flags=re.IGNORECASE
+        )
+        if len(parts) >= 2:
+            raw_doc = parts[0].strip()
+            raw_doc = re.sub(
+                r"^(?:tài\s+liệu|nguồn|file|tập\s+tin|doc)\s*:\s*",
+                "",
+                raw_doc,
+                flags=re.IGNORECASE
+            ).strip()
+            raw_pages = parts[1].rstrip(")")
+            page_numbers = set()
+            # Check for ranges like 1-3 or 1–3
+            for r in re.finditer(r"(\d+)\s*[-–—]\s*(\d+)", raw_pages):
+                start, end = int(r.group(1)), int(r.group(2))
+                for p in range(start, min(end + 1, start + limit)):
+                    page_numbers.add(p)
+            # Check for individual numbers
+            for num in re.findall(r"\b\d+\b", raw_pages):
+                page_numbers.add(int(num))
+            for p in sorted(page_numbers):
+                extracted.append((raw_doc, p))
+
+    # Fallback to standard regex if bracket split didn't find any
+    if not extracted:
+        for doc_name, page_str in _CITATION_PATTERN.findall(text):
+            try:
+                extracted.append((doc_name.strip(), int(page_str.strip())))
+            except ValueError:
+                continue
+
+    return extracted
+
+
+def strip_citation_markers(text: str, max_page_range: Optional[int] = None) -> str:
+    """Remove inline citation markers such as ``[Tài liệu: x.pdf, Trang 8]``.
+
+    Only brackets that parse as a citation are removed; other bracketed text,
+    Markdown links, and LaTeX display math are kept intact.
+    """
+    if not text:
+        return text
+
+    def _replace(match: re.Match) -> str:
+        return "" if extract_raw_citations(match.group(0).strip(), max_page_range) else match.group(0)
+
+    stripped = _MARKER_PATTERN.sub(_replace, text)
+    stripped = _SPACE_BEFORE_PUNCT.sub(r"\1", stripped)
+    return re.sub(r"[ \t]+$", "", stripped, flags=re.MULTILINE).strip()
+
+
 class RAGGenerator:
     """Coordinates LLM calls, parses citations, and applies hallucination guardrails."""
 
-    CITATION_PATTERN = re.compile(
-        r"\[(?:Tài liệu:\s*|Nguồn:\s*)?([^,\]|\(\)\n]+?)(?:\s*\|\s*|\s*,\s*|\s*-\s*|\s*\(|\s+)Trang(?:\s*:)?\s*(\d+)\)?\]",
-        re.IGNORECASE
-    )
-    BRACKET_PATTERN = re.compile(r"\[([^\]\n]+)\]")
+    # Public aliases: src/rag/nodes/answer.py reads ``generator.CITATION_PATTERN``.
+    CITATION_PATTERN = _CITATION_PATTERN
+    BRACKET_PATTERN = _BRACKET_PATTERN
 
     def __init__(
         self,
@@ -34,55 +115,12 @@ class RAGGenerator:
         self.max_page_range = max_page_range if max_page_range is not None else settings.max_citation_page_range
 
     def extract_raw_citations(self, text: str) -> List[tuple]:
-        """Extract document names and page numbers from text supporting multiple pages and ranges.
+        """Extract ``(doc_name, page_number)`` tuples; see module-level helper."""
+        return extract_raw_citations(text, max_page_range=self.max_page_range)
 
-        Supports formats:
-        - [Tài liệu: doc.pdf, Trang 4]
-        - [Tài liệu: doc.pdf, Trang 1, 4]
-        - [Tài liệu: doc.pdf, Trang 1 và 4]
-        - [doc.pdf, Trang 1-3]
-        - [doc.pdf (Trang 5)]
-        - [Nguồn: doc.pdf | Trang: 12]
-        - [Trang 4] (doc_name empty)
-        """
-        extracted = []
-        for bracket in self.BRACKET_PATTERN.findall(text):
-            # Split document name and page part
-            parts = re.split(
-                r"(?:,\s*|\s*\|\s*|\s*-\s*|\s*\()?(?:các\s+)?(?:trang|page)(?:\s*:)?\s*",
-                bracket,
-                flags=re.IGNORECASE
-            )
-            if len(parts) >= 2:
-                raw_doc = parts[0].strip()
-                raw_doc = re.sub(
-                    r"^(?:tài\s+liệu|nguồn|file|tập\s+tin|doc)\s*:\s*",
-                    "",
-                    raw_doc,
-                    flags=re.IGNORECASE
-                ).strip()
-                raw_pages = parts[1].rstrip(")")
-                page_numbers = set()
-                # Check for ranges like 1-3 or 1–3
-                for r in re.finditer(r"(\d+)\s*[-–—]\s*(\d+)", raw_pages):
-                    start, end = int(r.group(1)), int(r.group(2))
-                    for p in range(start, min(end + 1, start + self.max_page_range)):
-                        page_numbers.add(p)
-                # Check for individual numbers
-                for num in re.findall(r"\b\d+\b", raw_pages):
-                    page_numbers.add(int(num))
-                for p in sorted(page_numbers):
-                    extracted.append((raw_doc, p))
-
-        # Fallback to standard regex if bracket split didn't find any
-        if not extracted:
-            for doc_name, page_str in self.CITATION_PATTERN.findall(text):
-                try:
-                    extracted.append((doc_name.strip(), int(page_str.strip())))
-                except ValueError:
-                    continue
-
-        return extracted
+    def strip_citation_markers(self, text: str) -> str:
+        """Remove inline citation markers; see module-level helper."""
+        return strip_citation_markers(text, max_page_range=self.max_page_range)
 
     def parse_llm_output(
         self,
@@ -172,26 +210,6 @@ class RAGGenerator:
             abstained=False,
             retrieved_chunks=retrieved_chunks
         )
-
-    # Bracket not preceded by a backslash (LaTeX \[ \]) and not a Markdown link [x](url).
-    _MARKER_PATTERN = re.compile(r"[ \t]*(?<!\\)\[([^\]\n]+)\](?!\()")
-    _SPACE_BEFORE_PUNCT = re.compile(r"[ \t]+([.,;:!?)])")
-
-    def strip_citation_markers(self, text: str) -> str:
-        """Remove inline citation markers such as ``[Tài liệu: x.pdf, Trang 8]``.
-
-        Only brackets that parse as a citation are removed; other bracketed text,
-        Markdown links, and LaTeX display math are kept intact.
-        """
-        if not text:
-            return text
-
-        def _replace(match: re.Match) -> str:
-            return "" if self.extract_raw_citations(match.group(0).strip()) else match.group(0)
-
-        stripped = self._MARKER_PATTERN.sub(_replace, text)
-        stripped = self._SPACE_BEFORE_PUNCT.sub(r"\1", stripped)
-        return re.sub(r"[ \t]+$", "", stripped, flags=re.MULTILINE).strip()
 
     def generate_answer(
         self,

@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from src.api.error_handlers import register_error_handlers
 from src.api.routes import router
 from src.config import settings
 from src.ingestion.chunker import chunk_document
@@ -215,6 +216,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Domain errors raised anywhere in the application map onto the HTTP
+# {"detail": ...} contract at this single edge.
+register_error_handlers(app)
 
 app.include_router(router)
 

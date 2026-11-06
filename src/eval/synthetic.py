@@ -131,7 +131,7 @@ def load_corpus_pages(upload_dir: str, cache_path: Optional[str] = None) -> List
     if cache_path and Path(cache_path).exists():
         return json.loads(Path(cache_path).read_text(encoding="utf-8"))
 
-    from src.api.dependencies import SUPPORTED_EXTENSIONS
+    from src.application.ingestion_service import SUPPORTED_EXTENSIONS
     from src.ingestion.document_extractor import extract_pages_from_document
     from src.ingestion.ocr_engine import OcrEngine
 

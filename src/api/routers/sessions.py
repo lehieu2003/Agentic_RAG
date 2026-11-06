@@ -1,18 +1,16 @@
 """Chat session listing, inspection, and deletion routes."""
 
-from typing import Any, Dict
+from typing import Annotated, Any, Dict
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, Query
 
-from src.api.dependencies import get_session_store
+from src.api.dependencies import get_session_service
+from src.application.session_service import SessionService
 from src.models import (
     BatchDeleteSessionsRequest,
-    ChatMessage,
     SessionDetailResponse,
     SessionListResponse,
-    SessionSummary,
 )
-from src.rag.generator import RAGGenerator
 
 router = APIRouter()
 
@@ -24,23 +22,11 @@ router = APIRouter()
     summary="Danh sách tất cả các phiên hội thoại"
 )
 def list_sessions(
-    request: Request,
+    session_service: Annotated[SessionService, Depends(get_session_service)],
     limit: int = Query(default=50, ge=1, le=200, description="Số lượng phiên tối đa cần lấy"),
 ) -> SessionListResponse:
     """Liệt kê danh sách các phiên trò chuyện, sắp xếp theo thời gian cập nhật mới nhất."""
-    session_store = get_session_store(request)
-
-    sessions_raw = session_store.list_sessions(limit=limit)
-    sessions = [
-        SessionSummary(
-            id=s["id"],
-            title=s["title"],
-            created_at=str(s["created_at"]),
-            updated_at=str(s["updated_at"]),
-        )
-        for s in sessions_raw
-    ]
-    return SessionListResponse(sessions=sessions)
+    return session_service.list_sessions(limit=limit)
 
 @router.get(
     "/sessions/{session_id}",
@@ -48,75 +34,44 @@ def list_sessions(
     tags=["Hội thoại (Sessions)"],
     summary="Chi tiết phiên hội thoại và lịch sử tin nhắn"
 )
-def get_session_detail(request: Request, session_id: str) -> SessionDetailResponse:
+def get_session_detail(
+    session_id: str,
+    session_service: Annotated[SessionService, Depends(get_session_service)],
+) -> SessionDetailResponse:
     """Lấy thông tin chi tiết phiên hội thoại kèm toàn bộ tin nhắn đã gửi."""
-    session_store = get_session_store(request)
-
-    sess_raw = session_store.get_session(session_id)
-    if not sess_raw:
-        raise HTTPException(status_code=404, detail="Session not found")
-
-    messages_raw = session_store.get_messages(session_id)
-    # Messages saved before inline markers were stripped still contain them.
-    stripper = RAGGenerator(provider="mock")
-    messages = [
-        ChatMessage(**{**m, "content": stripper.strip_citation_markers(m["content"]) or m["content"]})
-        if m.get("role") == "assistant" and m.get("citations")
-        else ChatMessage(**m)
-        for m in messages_raw
-    ]
-    return SessionDetailResponse(
-        session=SessionSummary(**sess_raw),
-        messages=messages,
-    )
+    return session_service.get_session_detail(session_id)
 
 @router.delete(
     "/sessions/{session_id}",
     tags=["Hội thoại (Sessions)"],
     summary="Xoá phiên hội thoại và toàn bộ tin nhắn liên quan"
 )
-def delete_session(request: Request, session_id: str) -> Dict[str, Any]:
+def delete_session(
+    session_id: str,
+    session_service: Annotated[SessionService, Depends(get_session_service)],
+) -> Dict[str, Any]:
     """Xoá một phiên hội thoại khỏi cơ sở dữ liệu."""
-    session_store = get_session_store(request)
-
-    deleted = session_store.delete_session(session_id)
-    if not deleted:
-        raise HTTPException(status_code=404, detail="Session not found")
-
-    return {
-        "status": "success",
-        "session_id": session_id,
-        "message": f"Đã xoá phiên hội thoại '{session_id}' thành công."
-    }
+    return session_service.delete_session(session_id)
 
 @router.delete(
     "/sessions",
     tags=["Hội thoại (Sessions)"],
     summary="Xoá toàn bộ các phiên hội thoại và tin nhắn"
 )
-def delete_all_sessions(request: Request) -> Dict[str, Any]:
+def delete_all_sessions(
+    session_service: Annotated[SessionService, Depends(get_session_service)],
+) -> Dict[str, Any]:
     """Xoá toàn bộ phiên trò chuyện khỏi cơ sở dữ liệu."""
-    session_store = get_session_store(request)
-
-    deleted_count = session_store.delete_all_sessions()
-    return {
-        "status": "success",
-        "deleted_count": deleted_count,
-        "message": f"Đã xoá toàn bộ {deleted_count} phiên hội thoại thành công."
-    }
+    return session_service.delete_all_sessions()
 
 @router.post(
     "/sessions/batch-delete",
     tags=["Hội thoại (Sessions)"],
     summary="Xoá nhiều phiên hội thoại theo danh sách ID"
 )
-def delete_sessions_batch(request: Request, body: BatchDeleteSessionsRequest) -> Dict[str, Any]:
+def delete_sessions_batch(
+    body: BatchDeleteSessionsRequest,
+    session_service: Annotated[SessionService, Depends(get_session_service)],
+) -> Dict[str, Any]:
     """Xoá danh sách các phiên trò chuyện được chỉ định."""
-    session_store = get_session_store(request)
-
-    deleted_count = session_store.delete_sessions(body.session_ids)
-    return {
-        "status": "success",
-        "deleted_count": deleted_count,
-        "message": f"Đã xoá {deleted_count} phiên hội thoại thành công."
-    }
+    return session_service.delete_sessions_batch(body.session_ids)
