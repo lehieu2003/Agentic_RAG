@@ -47,3 +47,47 @@ def test_chunk_preserves_sentence_boundaries_and_nfc_doc_name():
         assert not c.text.startswith(" ")
         assert not c.text.endswith(" ")
 
+
+class _WhitespaceTokenizer:
+    """Minimal tokenizer implementing the HuggingFace encode/decode interface."""
+
+    def encode(self, text, add_special_tokens=False):
+        return text.split()
+
+    def decode(self, token_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False):
+        return " ".join(token_ids)
+
+
+def test_token_chunking_respects_limit_and_metadata():
+    text = " ".join(f"tu{i}" for i in range(120))
+    pages = [
+        {
+            "doc_name": "manual.pdf",
+            "page_number": 3,
+            "text": text,
+        }
+    ]
+
+    chunks = chunk_document(
+        pages,
+        tokenizer=_WhitespaceTokenizer(),
+        max_tokens=20,
+        overlap_tokens=5,
+    )
+
+    assert len(chunks) > 1
+    for chunk in chunks:
+        assert chunk.page_number == 3
+        assert chunk.doc_name == "manual.pdf"
+        assert chunk.metadata["chunk_method"] == "token"
+        assert chunk.metadata["token_count"] <= 20
+        assert not chunk.text.startswith(" ")
+        assert not chunk.text.endswith(" ")
+
+
+def test_character_chunking_remains_default_without_tokenizer():
+    pages = [{"doc_name": "manual.pdf", "page_number": 1, "text": "Câu ngắn. " * 20}]
+    chunks = chunk_document(pages, chunk_size=50, chunk_overlap=10)
+    assert chunks
+    assert all(chunk.metadata["chunk_method"] == "char" for chunk in chunks)
+

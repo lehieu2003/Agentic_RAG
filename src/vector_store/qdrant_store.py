@@ -17,19 +17,28 @@ class QdrantVectorStore:
         collection_name: str = "technical_documents",
         vector_size: int = 384,
         url: Optional[str] = None,
-        api_key: Optional[str] = None
+        api_key: Optional[str] = None,
+        recreate: bool = False,
     ):
         self.storage_path = storage_path
         self.collection_name = collection_name
         self.vector_size = vector_size
         self.url = url
         self.api_key = api_key
+        self.recreate = recreate
+        self._collection_ready = False
 
         if url:
             try:
                 self.client = QdrantClient(url=url, api_key=api_key, timeout=60.0)
+                if recreate:
+                    self._delete_collection_if_exists()
                 self._ensure_collection()
                 return
+            except ValueError:
+                # A dimension mismatch must be surfaced instead of silently
+                # falling back to a different local collection.
+                raise
             except Exception as e:
                 import logging
                 logging.getLogger("qdrant_store").warning(
@@ -46,19 +55,57 @@ class QdrantVectorStore:
             Path(local_path).mkdir(parents=True, exist_ok=True)
             self.client = QdrantClient(path=local_path)
 
+        if recreate:
+            self._delete_collection_if_exists()
         self._ensure_collection()
 
-    def _ensure_collection(self) -> None:
-        """Create the collection if it does not exist."""
+    def _delete_collection_if_exists(self) -> None:
+        """Delete the configured collection when an explicit rebuild is requested."""
         try:
             existing = [c.name for c in self.client.get_collections().collections]
-            if self.collection_name not in existing:
-                self.client.create_collection(
-                    collection_name=self.collection_name,
-                    vectors_config=VectorParams(size=self.vector_size, distance=Distance.COSINE)
-                )
+            if self.collection_name in existing:
+                self.client.delete_collection(collection_name=self.collection_name)
         except Exception:
             pass
+
+    def _ensure_collection(self) -> None:
+        """Create the collection if needed and fail fast on a dimension mismatch."""
+        if self._collection_ready:
+            return
+
+        try:
+            existing = [c.name for c in self.client.get_collections().collections]
+        except Exception:
+            return
+
+        if self.collection_name not in existing:
+            self.client.create_collection(
+                collection_name=self.collection_name,
+                vectors_config=VectorParams(size=self.vector_size, distance=Distance.COSINE)
+            )
+            self._collection_ready = True
+            return
+
+        try:
+            info = self.client.get_collection(self.collection_name)
+            vectors_config = getattr(getattr(info, "config", None), "params", None)
+            vectors_config = getattr(vectors_config, "vectors", None)
+            existing_size = getattr(vectors_config, "size", None)
+            if existing_size is not None and int(existing_size) != int(self.vector_size):
+                raise ValueError(
+                    f"Qdrant collection '{self.collection_name}' has vector size "
+                    f"{existing_size}, but the configured embedding model produces "
+                    f"{self.vector_size} dimensions. Re-create the collection and "
+                    f"reindex: python scripts/reindex.py --recreate --yes"
+                )
+        except ValueError:
+            raise
+        except Exception:
+            # Some Qdrant-compatible backends do not expose collection metadata;
+            # keep the previous permissive behavior in that case.
+            pass
+
+        self._collection_ready = True
 
     def get_indexed_doc_names(self) -> set:
         """Return the set of distinct document names currently indexed."""

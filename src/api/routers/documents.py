@@ -16,6 +16,7 @@ from src.api.dependencies import SUPPORTED_EXTENSIONS, _get_upload_dir
 from src.config import settings
 from src.ingestion.chunker import chunk_document
 from src.ingestion.document_extractor import extract_pages_from_document
+from src.ingestion.tokenization import get_chunk_token_limit
 from src.models import FileSummary, UploadResponse
 
 router = APIRouter()
@@ -102,7 +103,20 @@ async def upload_document(
         for p in pages:
             p["doc_name"] = safe_filename
 
-        chunks = chunk_document(pages, chunk_size=settings.chunk_size, chunk_overlap=settings.chunk_overlap)
+        embedder = getattr(request.app.state, "embedding_model", None)
+        tokenizer = getattr(embedder, "tokenizer", None)
+        max_tokens = get_chunk_token_limit(
+            getattr(embedder, "max_seq_length", None),
+            settings.chunk_size_tokens,
+        )
+        chunks = chunk_document(
+            pages,
+            chunk_size=settings.chunk_size,
+            chunk_overlap=settings.chunk_overlap,
+            tokenizer=tokenizer,
+            max_tokens=max_tokens,
+            overlap_tokens=settings.chunk_overlap_tokens,
+        )
         try:
             indexed_count = retriever.index_chunks(chunks)
         except NotImplementedError:
@@ -135,8 +149,9 @@ async def upload_document(
 )
 def list_files(request: Request) -> List[FileSummary]:
     """Liệt kê danh sách tài liệu đang thực sự được đánh chỉ mục trong hệ thống.
-    Đồng bộ với Qdrant Vector Store: nếu collection bị xoá hoặc rỗng, các file mồ côi
-    trên ổ cứng sẽ tự động được dọn dẹp để đảm bảo tính nhất quán tuyệt đối.
+
+    Đây là endpoint chỉ đọc: file mồ côi hoặc file tạm đang upload sẽ bị bỏ qua
+    nhưng không bị xoá. Việc dọn dẹp phải do một job bảo trì/reindex riêng thực hiện.
     """
     upload_dir = _get_upload_dir()
     retriever = getattr(request.app.state, "retriever", None)
@@ -152,7 +167,8 @@ def list_files(request: Request) -> List[FileSummary]:
         if f.is_file() and not f.name.startswith("."):
             norm_name = unicodedata.normalize("NFC", f.name)
             if norm_name not in active_docs_norm:
-                f.unlink(missing_ok=True)
+                # Never delete from a GET request: a transient vector-store error
+                # or a collection rebuild must not wipe the raw uploads.
                 continue
 
             stat = f.stat()

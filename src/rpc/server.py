@@ -60,10 +60,16 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     logger = logging.getLogger("rpc_server")
 
-    embed_model = EmbeddingModel(settings.embedding_model)
+    embed_model = EmbeddingModel(
+        settings.embedding_model,
+        device=settings.embedding_device or None,
+        max_seq_length=settings.embedding_max_seq_length,
+        batch_size=settings.embedding_batch_size,
+    )
     store = QdrantVectorStore(
         storage_path=settings.qdrant_path,
         collection_name=settings.qdrant_collection,
+        vector_size=embed_model.dimension,
         url=settings.qdrant_url if settings.qdrant_url else None,
         api_key=settings.qdrant_api_key if settings.qdrant_api_key else None
     )

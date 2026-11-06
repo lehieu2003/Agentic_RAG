@@ -64,3 +64,20 @@ def test_qdrant_cloud_initialization():
         assert store.api_key == "secret-api-key"
 
 
+def test_dimension_mismatch_fails_fast(tmp_path: Path):
+    storage_path = str(tmp_path / "dimension_qdrant")
+    store = QdrantVectorStore(
+        storage_path=storage_path,
+        collection_name="dimension_test",
+        vector_size=384,
+    )
+    store.close()
+
+    with pytest.raises(ValueError, match="vector size"):
+        QdrantVectorStore(
+            storage_path=storage_path,
+            collection_name="dimension_test",
+            vector_size=768,
+        )
+
+

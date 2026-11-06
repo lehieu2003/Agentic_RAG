@@ -175,3 +175,17 @@ def test_serve_file_vietnamese_unicode_headers(client):
     assert "application/pdf" in resp.headers.get("content-type", "")
     assert "inline" in resp.headers.get("content-disposition", "")
     assert resp.content == pdf_bytes
+
+
+def test_list_files_never_deletes_unindexed_uploads(client, tmp_path):
+    """GET /files must stay read-only, even when a raw file is not indexed yet."""
+    upload_dir = tmp_path / "uploads"
+    orphan = upload_dir / "not_indexed_yet.txt"
+    orphan.write_text("Tài liệu đang chờ reindex.", encoding="utf-8")
+
+    resp = client.get("/api/v1/files")
+    assert resp.status_code == 200
+
+    filenames = [f["filename"] for f in resp.json()]
+    assert "not_indexed_yet.txt" not in filenames
+    assert orphan.exists(), "GET /files must not delete raw uploads"

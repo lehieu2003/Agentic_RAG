@@ -9,6 +9,7 @@ from src.config import settings
 from src.ingestion.chunker import chunk_document
 from src.ingestion.document_extractor import extract_pages_from_document
 from src.ingestion.ocr_engine import OcrEngine
+from src.ingestion.tokenization import get_chunk_token_limit
 from src.rag.generator import RAGGenerator
 from src.rag.agent import AgenticRAG
 from src.retrieval.bm25 import BM25Retriever
@@ -27,10 +28,20 @@ async def lifespan(app: FastAPI):
     app.state.ocr_engine = OcrEngine()
 
     # 2. Vector Store & Embedding Model
-    app.state.embedding_model = EmbeddingModel(settings.embedding_model)
+    app.state.embedding_model = EmbeddingModel(
+        settings.embedding_model,
+        device=settings.embedding_device or None,
+        max_seq_length=settings.embedding_max_seq_length,
+        batch_size=settings.embedding_batch_size,
+    )
+    chunk_token_limit = get_chunk_token_limit(
+        app.state.embedding_model.max_seq_length,
+        settings.chunk_size_tokens,
+    )
     app.state.vector_store = QdrantVectorStore(
         storage_path=settings.qdrant_path,
         collection_name=settings.qdrant_collection,
+        vector_size=app.state.embedding_model.dimension,
         url=settings.qdrant_url if settings.qdrant_url else None,
         api_key=settings.qdrant_api_key if settings.qdrant_api_key else None
     )
@@ -121,7 +132,14 @@ async def lifespan(app: FastAPI):
                         nfc_doc_name = unicodedata.normalize("NFC", file_path.name)
                         for p in pages:
                             p["doc_name"] = nfc_doc_name
-                        chunks = chunk_document(pages, chunk_size=settings.chunk_size, chunk_overlap=settings.chunk_overlap)
+                        chunks = chunk_document(
+                            pages,
+                            chunk_size=settings.chunk_size,
+                            chunk_overlap=settings.chunk_overlap,
+                            tokenizer=app.state.embedding_model.tokenizer,
+                            max_tokens=chunk_token_limit,
+                            overlap_tokens=settings.chunk_overlap_tokens,
+                        )
                         bm25_retriever.index_chunks(chunks)
                     except Exception:
                         pass

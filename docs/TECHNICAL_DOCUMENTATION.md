@@ -35,8 +35,8 @@ Trong môi trường kỹ thuật, sản xuất và công nghiệp, các tài li
 **Document Q&A Assistant** giải quyết triệt để các vấn đề trên bằng kiến trúc **Agentic RAG (Adaptive & Corrective RAG)** khép kín được xây dựng trên nền tảng **LangGraph v2**, kết hợp tìm kiếm kết hợp (Hybrid Search), xếp hạng lại cục bộ (Cross-Encoder Reranking), đánh giá ngữ cảnh tự động (Sufficiency Grader), và cơ chế tự sửa lỗi trích dẫn (Citation Self-Correction Loop) với chốt chặn từ chối dứt khoát (*Abstention Guardrail*).
 
 ### 1.2. Các chỉ số kỹ thuật chính
-- **Mô hình nhúng (Dense Embedding):** `sentence-transformers/all-MiniLM-L6-v2` (384 chiều).
-- **Mô hình xếp hạng lại (Cross-Encoder):** `BAAI/bge-reranker-base` (chạy cục bộ CPU/GPU).
+- **Mô hình nhúng (Dense Embedding):** `intfloat/multilingual-e5-large-instruct` (1024 chiều, đa ngữ Việt–Anh, query dùng prefix `Instruct: ... Query:`).
+- **Mô hình xếp hạng lại (Cross-Encoder):** `BAAI/bge-reranker-v2-m3` (đa ngữ, chạy cục bộ CPU/GPU/MPS).
 - **Cơ sở dữ liệu Vector:** Qdrant (hỗ trợ cả Qdrant Cloud và In-Memory/Local Embedded).
 - **Tìm kiếm từ khóa (Sparse Retrieval):** BM25Okapi tùy biến bảo toàn mã kỹ thuật và mở rộng không dấu (*Accent-Agnostic*).
 - **Hợp nhất điểm số:** Reciprocal Rank Fusion (RRF, $k=60$).
@@ -79,7 +79,7 @@ flowchart TD
         OCREngine["OcrEngine (Tesseract / RapidOCR)"]
         DocxExtractor["python-docx (DOCX)"]
         TxtExtractor["UTF-8/Chardet Extractor (TXT)"]
-        SemanticChunker["Boundary-Preserving Chunker\n(chunk_size=1200, overlap=200)"]
+        SemanticChunker["Token-aware Chunker\n(400 tokens, overlap 50)"]
         
         DocExtractor --> PyMuPDFEngine
         DocExtractor --> OCREngine
@@ -92,7 +92,7 @@ flowchart TD
         LocalRetriever["LocalRetriever (Dense Embeddings)"]
         BM25Retriever["BM25Retriever (Accent-Agnostic Sparse)"]
         HybridRetriever["HybridRetriever (RRF k=60)"]
-        CrossReranker["CrossEncoderReranker (bge-reranker-base)"]
+        CrossReranker["CrossEncoderReranker (bge-reranker-v2-m3)"]
         GrpcClient["GrpcRetriever (Optional Microservice)"]
         
         HybridRetriever --> LocalRetriever
@@ -148,8 +148,8 @@ unicodedata.normalize("NFC", text)
 
 ### 3.3. Phân đoạn văn bản bảo toàn ranh giới câu (`chunk_document`)
 Thay vì cắt chuỗi thô theo số ký tự cứng nhắc (khiến từ hoặc câu bị đứt đoạn), hàm [`chunk_document`](file:///Users/lehieu/Projects/personal/Agentic_RAG/src/ingestion/chunker.py) triển khai thuật toán trượt cửa sổ dựa trên ranh giới ngữ pháp:
-- **Kích thước chunk (`chunk_size`):** 1,200 ký tự.
-- **Độ gối đầu (`chunk_overlap`):** 200 ký tự.
+- **Chế độ token (mặc định khi có tokenizer embedding):** `CHUNK_SIZE_TOKENS=400`, `CHUNK_OVERLAP_TOKENS=50`. Giới hạn thực tế là `min(CHUNK_SIZE_TOKENS, max_seq_length - 64)` (xem [`get_chunk_token_limit`](../src/ingestion/tokenization.py)) để chunk và query luôn nằm trong context của model. Metadata ghi thêm `chunk_method` và `token_count`.
+- **Chế độ ký tự (fallback):** `chunk_size` 1,200 ký tự, `chunk_overlap` 200 ký tự.
 - **Bảo toàn số trang:** Mỗi chunk luôn gắn chặt với metadata `page_number`, `doc_name`, `chunk_index`, và cờ `is_scanned`.
 
 ---
@@ -205,7 +205,7 @@ Thay vì cắt chuỗi thô theo số ký tự cứng nhắc (khiến từ hoặ
                                     |
                                     v
                  [ Cross-Encoder Local Reranker ]
-                  (BAAI/bge-reranker-base Model)
+                  (BAAI/bge-reranker-v2-m3 Model)
                                     |
                                     v
                      [ Top 5 Reranked Context ]
@@ -226,7 +226,7 @@ Trong đó $k = 60$, $r_m(d)$ là thứ hạng của tài liệu $d$ trong danh 
   Nhờ đó, câu hỏi có dấu tìm kiếm hoàn hảo trên tài liệu scan không dấu, đưa thứ hạng trang đích từ ngoài Top 50 lên thẳng **Vị trí #1**.
 
 ### 5.3. Xếp hạng lại cục bộ bảo toàn ứng viên hàng đầu (`CrossEncoderReranker`)
-- Sử dụng mô hình Cross-Encoder `BAAI/bge-reranker-base`.
+- Sử dụng mô hình Cross-Encoder `BAAI/bge-reranker-v2-m3`.
 - **Cơ chế bảo vệ (Candidate Preservation Guard):** Khi văn bản OCR có nhiều ký tự lỗi, điểm xác suất của Cross-Encoder có thể bị suy giảm. Để ngăn Cross-Encoder vô tình đẩy các trang bằng chứng tốt nhất của Hybrid Search ra ngoài Top 5, hệ thống tự động kiểm tra và bảo toàn 2 ứng viên xuất sắc nhất của Hybrid Search vào ngữ cảnh gửi tới Generator.
 
 ---
@@ -431,9 +431,14 @@ QDRANT_COLLECTION=technical_documents
 QDRANT_URL=https://your-cluster.qdrant.io
 QDRANT_API_KEY=your_qdrant_api_key
 
-# Embedding & Reranker
-EMBEDDING_MODEL=all-MiniLM-L6-v2
-RERANKER_MODEL=BAAI/bge-reranker-base
+# Embedding & Reranker (đổi model/chiều vector => chạy scripts/reindex.py)
+EMBEDDING_MODEL=intfloat/multilingual-e5-large-instruct
+EMBEDDING_MAX_SEQ_LENGTH=512
+EMBEDDING_BATCH_SIZE=32
+EMBEDDING_DEVICE=            # "mps" / "cuda" / để trống = auto
+RERANKER_MODEL=BAAI/bge-reranker-v2-m3
+CHUNK_SIZE_TOKENS=400
+CHUNK_OVERLAP_TOKENS=50
 
 # Chế độ Retrieval: "local" hoặc "grpc"
 RETRIEVAL_MODE=local

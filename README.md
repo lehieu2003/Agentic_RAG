@@ -134,11 +134,12 @@ Hệ thống tuân thủ kiến trúc Clean / Hexagonal Modular Monorepo kết h
    - Theo dõi trạng thái trực tiếp theo thời gian thực (tổng số tệp, thành công, đã tồn tại / trùng lặp, thất bại, và tổng số chunk đã nạp vào vector database).
 
 7. **Chunking bảo toàn số trang & metadata**:
-   - Phân chia văn bản thành các đoạn (chunks) có overlap.
+   - Phân chia văn bản theo **token** của chính tokenizer embedding (mặc định 400 token, overlap 50), luôn nằm gọn trong `EMBEDDING_MAX_SEQ_LENGTH` (chừa 64 token cho prefix query). Khi không có tokenizer, fallback về chế độ ký tự (1.200 ký tự, overlap 200).
    - Giữ nguyên `doc_name` và `page_number` (1-indexed) ở từng chunk bất kể tài liệu là PDF, DOCX, TXT hay Ảnh.
 
 8. **Vector Database (Qdrant Cloud & Local)**:
-   - Sử dụng model `sentence-transformers/all-MiniLM-L6-v2` tạo vector 384 chiều chuẩn hóa.
+   - Embedding đa ngữ Việt–Anh `intfloat/multilingual-e5-large-instruct` (1024 chiều, chuẩn hoá) với prefix instruct cho query; reranker `BAAI/bge-reranker-v2-m3`.
+   - Khởi động sẽ báo lỗi ngay nếu số chiều collection không khớp model. Sau khi đổi `EMBEDDING_MODEL`, chạy `python scripts/reindex.py --recreate --yes` (hoặc đổi `QDRANT_COLLECTION` sang collection mới rồi chạy `python scripts/reindex.py`). Dùng `--dry-run` để xem trước số chunk.
    - Hỗ trợ kết nối Qdrant Cloud Cluster (`QDRANT_URL`, `QDRANT_API_KEY`) hoặc lưu trữ cục bộ.
 
 9. **Evaluation Suite (Recall@K Benchmark)**:
@@ -187,8 +188,10 @@ UPLOAD_DIR="data/uploads"          # Thư mục lưu trữ tài liệu gốc
 
 ### 3. Chạy Benchmark Evaluation
 ```bash
-# Chạy benchmark đo Recall@K trên tập Ground Truth
-python scripts/run_eval.py
+# Chạy benchmark trên collection Qdrant tạm (không đụng index thật)
+python scripts/run_eval.py                      # retrieval + agent (LLM mock)
+python scripts/run_eval.py --no-agent           # chỉ đo retrieval
+python scripts/run_eval.py --provider gemini --output report.json   # agent với LLM thật
 ```
 
 ### 4. Khởi chạy FastAPI Backend
@@ -436,11 +439,12 @@ Khi bạn muốn tách tầng Retrieval thành một process / service độc l�
    from src.rpc.server import start_grpc_server
 
    embedder = EmbeddingModel()
-   store = QdrantVectorStore()
+   store = QdrantVectorStore(vector_size=embedder.dimension)
    retriever = LocalRetriever(embedder, store)
    server = start_grpc_server(retriever, port=50051)
    server.wait_for_termination()
    ```
+   Hoặc chạy trực tiếp: `python -m src.rpc.server` (đọc cấu hình từ `.env`).
 
 2. **Cấu hình FastAPI gọi qua gRPC:**
    Trong `.env`:
@@ -455,7 +459,7 @@ Khi bạn muốn tách tầng Retrieval thành một process / service độc l�
 
 ## 5. Kết quả đánh giá (Benchmark Results)
 
-Kết quả đo lường thực tế trên bộ dữ liệu kiểm thử `data/eval/ground_truth.json`:
+Kết quả đo lường thực tế trên bộ dữ liệu kiểm thử `data/eval/ground_truth.json` (số liệu dưới đây đo với cấu hình cũ `all-MiniLM-L6-v2`):
 
 | Chỉ số | Kết quả đạt được | Mục tiêu đề ra | Đánh giá |
 |---|---|---|---|
