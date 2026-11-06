@@ -48,7 +48,16 @@ Trong môi trường kỹ thuật, sản xuất và công nghiệp, các tài li
 
 ## 2. Kiến trúc tổng thể (System Architecture)
 
-Hệ thống được thiết kế theo nguyên lý **Clean / Hexagonal Architecture**, phân tách độc lập giữa Core Domain Models, Business Logic, Retrieval Engines và Presentation Adapters:
+Hệ thống được thiết kế theo nguyên lý **Clean / Hexagonal Architecture**, phân tách độc lập giữa Core Domain Models, Business Logic, Retrieval Engines và Presentation Adapters. Backend được tổ chức thành các tầng rõ ràng với nguyên tắc **dependency chỉ chảy từ ngoài vào trong** (API → Application → Domain):
+
+| Tầng | Thư mục | Trách nhiệm |
+|---|---|---|
+| **Domain** | `src/domain/` | Lỗi nghiệp vụ (`DomainError` hierarchy tự mang HTTP status). Không import FastAPI hay bất kỳ framework nào |
+| **Application** | `src/application/` | Orchestration use-case: `ChatService` (resolve session → nạp lịch sử → gọi agent → persist lượt hội thoại), `IngestionService` (dedup → atomic write → extract/OCR → chunk → index → dọn dẹp khi lỗi), `SessionService` (list/detail/delete/batch-delete) |
+| **Presentation** | `src/api/` | Router mỏng (parse request → gọi service → build response), `dependencies.py` (composition root request-scoped: các typed provider lắp service từ `app.state` qua `Depends`), `error_handlers.py` (map `DomainError` → HTTP contract `{"detail": ...}` tại một điểm duy nhất) |
+| **Agent core** | `src/rag/` | LangGraph workflow 9 node, prompt, citation parsing (`extract_raw_citations`, `strip_citation_markers` là pure functions), guardrails |
+| **Adapter / Infra** | `src/retrieval/`, `src/vector_store/`, `src/storage/`, `src/ingestion/` | Hiện thực hoá interface `BaseRetriever` (Hybrid RRF, BM25, Cross-Encoder, gRPC), Qdrant, SQLite `SessionStore`, extractors |
+| **Shared contracts** | `src/models.py`, `src/config.py` | Pydantic models dùng chung và `Settings` (Pydantic Settings + `.env`) |
 
 ```mermaid
 flowchart TD

@@ -6,7 +6,20 @@ Hệ thống Chatbot hỏi đáp tài liệu kỹ thuật chuyên nghiệp ứng
 
 ## 1. Kiến trúc hệ thống (Architecture)
 
-Hệ thống tuân thủ kiến trúc Clean / Hexagonal Modular Monorepo kết hợp quy trình **Agentic RAG Loop**:
+Hệ thống tuân thủ kiến trúc Clean / Hexagonal Modular Monorepo kết hợp quy trình **Agentic RAG Loop**. Backend được phân tầng với nguyên tắc dependency chỉ chảy từ ngoài vào trong (API → Application → Domain):
+
+```
+src/
+├── domain/         # Lỗi nghiệp vụ (DomainError) — không phụ thuộc framework
+├── application/    # Use-case services: ChatService · IngestionService · SessionService
+├── api/            # FastAPI routers mỏng + Depends providers + error handlers
+├── rag/            # LangGraph Agentic RAG engine (9 node), citation guardrails
+├── retrieval/      # BaseRetriever port: Hybrid (RRF) · BM25 · Cross-Encoder · gRPC
+├── vector_store/   # EmbeddingModel (E5) · Qdrant
+├── ingestion/      # Extract (PyMuPDF/OCR/DOCX/TXT) · semantic chunker
+├── storage/        # SQLite SessionStore (schema + queries)
+└── eval/           # Benchmark Recall@K · synthetic QA + LLM judge
+```
 
 ### Sơ đồ tổng thể hệ thống (System Overview)
 
