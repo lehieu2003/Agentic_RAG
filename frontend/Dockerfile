@@ -1,5 +1,6 @@
-# Build stage: compile the SPA.
-FROM node:20-alpine AS build
+# Build stage: compile the SPA. Node 24 matches the CI/development line
+# (jsdom 30's undici 8 does not load under older Node).
+FROM node:24-alpine AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
