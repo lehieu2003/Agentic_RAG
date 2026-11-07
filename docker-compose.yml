@@ -27,6 +27,7 @@ services:
         required: false   # requires Docker Compose v2.24+
     volumes:
       - rag-data:/data
+      - ./data/uploads:/data/uploads   # host uploads shared with the container
     restart: unless-stopped
 
   frontend:
