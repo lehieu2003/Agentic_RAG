@@ -1,8 +1,12 @@
 """SentenceTransformers embedding wrapper with model-aware query/document prefixes."""
 
+import logging
 from typing import List, Optional
 
+import torch
 from sentence_transformers import SentenceTransformer
+
+logger = logging.getLogger(__name__)
 
 E5_INSTRUCT_QUERY_PREFIX = (
     "Instruct: Given a technical document question, retrieve passages that answer the question\n"
@@ -36,6 +40,7 @@ class EmbeddingModel:
         if device:
             model_kwargs["device"] = device
         self._model = SentenceTransformer(model_name, **model_kwargs)
+        self._ensure_cpu_precision()
 
         if max_seq_length:
             native_max = getattr(self._model, "max_seq_length", None)
@@ -53,6 +58,26 @@ class EmbeddingModel:
             self._dimension = self._model.get_embedding_dimension() or 384
         else:
             self._dimension = self._model.get_sentence_embedding_dimension() or 384
+
+    def _ensure_cpu_precision(self) -> None:
+        """Promote float16 checkpoints to float32 when running on CPU.
+
+        Some checkpoints (e.g. multilingual-e5-large-instruct) ship float16
+        weights. PyTorch CPU has no fast fp16 path, so inference would be much
+        slower than float32; on MPS/CUDA the original dtype is fine and stays.
+        """
+        try:
+            if "cpu" not in str(self._model.device).lower():
+                return
+            if next(self._model.parameters()).dtype is not torch.float16:
+                return
+            logger.warning(
+                "Embedding model '%s' ships float16 weights; converting to float32 for CPU inference.",
+                self.model_name,
+            )
+            self._model.float()
+        except Exception as e:
+            logger.warning("Could not inspect embedding model precision: %s", e)
 
     @staticmethod
     def resolve_prefixes(
