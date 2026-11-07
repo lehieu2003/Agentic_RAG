@@ -20,6 +20,7 @@ export default function App() {
     messages,
     isQuerying,
     isUploading,
+    uploadFilename,
     sidebarError,
     setSidebarError,
     handleFileUpload,
@@ -62,6 +63,7 @@ export default function App() {
           onDeleteAllSessions={handleDeleteAllSessions}
           onDeleteSessions={handleDeleteSessions}
           isUploading={isUploading}
+          uploadFilename={uploadFilename}
           errorMessage={sidebarError}
           onDismissError={() => setSidebarError(null)}
         />

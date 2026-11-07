@@ -34,6 +34,19 @@ export interface FileUploadResponse {
   message?: string;
 }
 
+export type IngestionJobStatus = 'queued' | 'running' | 'success' | 'already_exists' | 'failed';
+
+export interface IngestionJob {
+  job_id: string;
+  filename: string;
+  status: IngestionJobStatus;
+  created_at: string;
+  started_at?: string | null;
+  finished_at?: string | null;
+  result?: FileUploadResponse | null;
+  error?: string | null;
+}
+
 export interface Citation {
   filename?: string;
   doc_name?: string;

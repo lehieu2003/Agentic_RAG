@@ -6,6 +6,7 @@ parses requests. All business-rule failures raise
 """
 
 from datetime import datetime, timezone
+import logging
 import os
 from pathlib import Path
 from typing import Any, BinaryIO, Dict, List, Optional
@@ -15,6 +16,7 @@ import uuid
 from src.config import settings
 from src.domain.exceptions import (
     DocumentExtractionError,
+    DomainError,
     IndexingNotSupportedError,
     NotFoundError,
     RetrievalError,
@@ -24,8 +26,10 @@ from src.domain.exceptions import (
 from src.ingestion.chunker import chunk_document
 from src.ingestion.document_extractor import extract_pages_from_document
 from src.ingestion.tokenization import get_chunk_token_limit
-from src.models import FileSummary, UploadResponse
+from src.models import FileSummary, IngestionJobResponse, IngestionJobStatus, UploadResponse
 from src.retrieval.base import BaseRetriever
+
+logger = logging.getLogger(__name__)
 
 SUPPORTED_EXTENSIONS = {".pdf", ".docx", ".txt", ".png", ".jpg", ".jpeg"}
 
@@ -78,11 +82,85 @@ class IngestionService:
     # Use-cases
     # ------------------------------------------------------------------ #
     def ingest(self, filename: Optional[str], fileobj: BinaryIO) -> UploadResponse:
-        """Store, extract, chunk, and index an uploaded document.
+        """Store, extract, chunk, and index an uploaded document (synchronous).
 
         Raises :class:`UnsupportedFileTypeError`, :class:`DocumentExtractionError`,
         :class:`IndexingNotSupportedError`, or :class:`RetrievalError` on failure;
         a partially stored file is removed before the error propagates.
+        """
+        safe_filename, target_path, duplicate = self._store_upload(filename, fileobj)
+        if duplicate:
+            return self._already_exists_response(safe_filename)
+        return self._process_stored_file(safe_filename, target_path, filename)
+
+    def start_ingestion_job(
+        self,
+        filename: Optional[str],
+        fileobj: BinaryIO,
+        job_store,
+    ) -> IngestionJobResponse:
+        """Store the upload and register a background job for heavy processing.
+
+        The synchronous part is deliberately tiny (validation + durable file
+        write) so the HTTP response returns fast; extraction, OCR, chunking,
+        and indexing happen in :meth:`run_ingestion_job`.
+        """
+        safe_filename, _target_path, duplicate = self._store_upload(filename, fileobj)
+        job = job_store.create(safe_filename, job_id=uuid.uuid4().hex)
+        if duplicate:
+            job_store.mark_finished(
+                job.job_id,
+                IngestionJobStatus.ALREADY_EXISTS,
+                result=self._already_exists_response(safe_filename),
+            )
+            return job_store.get(job.job_id)
+        return job
+
+    def run_ingestion_job(self, job_id: str, job_store) -> None:
+        """Process a stored upload in the background and update the job record."""
+        job = job_store.get(job_id)
+        if job is None:
+            return
+        job_store.mark_running(job_id)
+
+        target_path = self._resolve_file(job.filename)
+        if target_path is None:
+            job_store.mark_finished(
+                job_id,
+                IngestionJobStatus.FAILED,
+                error=f"Stored file '{job.filename}' disappeared before processing.",
+            )
+            return
+
+        try:
+            result = self._process_stored_file(job.filename, target_path, job.filename)
+            job_store.mark_finished(job_id, IngestionJobStatus.SUCCESS, result=result)
+        except Exception as e:
+            logger.warning("Background ingestion of '%s' failed: %s", job.filename, e)
+            detail = e.detail if isinstance(e, DomainError) else str(e)
+            job_store.mark_finished(job_id, IngestionJobStatus.FAILED, error=detail)
+
+    # ------------------------------------------------------------------ #
+    # Internal helpers
+    # ------------------------------------------------------------------ #
+    @staticmethod
+    def _already_exists_response(safe_filename: str) -> UploadResponse:
+        return UploadResponse(
+            filename=safe_filename,
+            pages_extracted=0,
+            pages_digital=0,
+            pages_scanned_ocr=0,
+            chunks_indexed=0,
+            status="already_exists",
+            message=f"Tài liệu '{safe_filename}' đã tồn tại trên hệ thống. Bỏ qua nạp trùng lặp."
+        )
+
+    def _store_upload(self, filename: Optional[str], fileobj: BinaryIO):
+        """Validate, deduplicate, and durably store the raw upload.
+
+        Returns ``(safe_filename, target_path, duplicate)``. Raises
+        :class:`UnsupportedFileTypeError` / :class:`RetrievalError` /
+        :class:`UploadTooLargeError`.
         """
         raw_filename = Path(filename).name if filename else "uploaded_document"
         safe_filename = unicodedata.normalize("NFC", raw_filename)
@@ -92,26 +170,17 @@ class IngestionService:
                 f"Unsupported file format: {ext}. Supported formats: {', '.join(sorted(SUPPORTED_EXTENSIONS))}"
             )
 
-        upload_dir = self._get_upload_dir()
-        target_path = upload_dir / safe_filename
-
         if self._retriever is None:
             raise RetrievalError("Retriever service not initialized.")
+
+        upload_dir = self._get_upload_dir()
+        target_path = upload_dir / safe_filename
 
         # Deduplication check: only skip if document actually exists in active vector store!
         active_docs = self._retriever.get_indexed_doc_names()
         active_docs_norm = {unicodedata.normalize("NFC", d) for d in active_docs}
-
         if safe_filename in active_docs_norm and target_path.exists():
-            return UploadResponse(
-                filename=safe_filename,
-                pages_extracted=0,
-                pages_digital=0,
-                pages_scanned_ocr=0,
-                chunks_indexed=0,
-                status="already_exists",
-                message=f"Tài liệu '{safe_filename}' đã tồn tại trên hệ thống. Bỏ qua nạp trùng lặp."
-            )
+            return safe_filename, target_path, True
 
         # Atomic file write: save to temporary file first, then rename to target_path.
         # The copy is bounded by MAX_UPLOAD_MB so a huge body cannot fill the disk.
@@ -135,18 +204,24 @@ class IngestionService:
             tmp_target.unlink(missing_ok=True)
             raise
 
+        return safe_filename, target_path, False
+
+    def _process_stored_file(
+        self, safe_filename: str, target_path: Path, original_filename: Optional[str]
+    ) -> UploadResponse:
+        """Extract, chunk, and index a stored upload; clean up on failure."""
         try:
             try:
                 pages = extract_pages_from_document(str(target_path), ocr_engine=self._ocr_engine)
             except Exception as e:
                 raise DocumentExtractionError(
-                    f"Corrupted or unreadable document '{filename}': {e}"
+                    f"Corrupted or unreadable document '{original_filename}': {e}"
                 ) from e
 
             errors = [p["error"] for p in pages if p.get("error")]
             if errors and not any(p.get("text", "").strip() for p in pages):
                 raise DocumentExtractionError(
-                    f"Failed to extract text from '{filename}': {errors[0]}"
+                    f"Failed to extract text from '{original_filename}': {errors[0]}"
                 )
 
             # Update doc_name to safe filename

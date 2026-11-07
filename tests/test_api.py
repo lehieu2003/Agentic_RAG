@@ -1,5 +1,7 @@
 # tests/test_api.py
 import io
+import json
+import time
 import pymupdf
 import pytest
 from unittest.mock import MagicMock, patch
@@ -255,5 +257,125 @@ def test_rate_limit_middleware_returns_429():
     assert codes[:2] == [200, 200]
     assert codes[2] == 429
     assert codes[3] == 429
+
+
+# ---------------------------------------------------------------------------
+# Background ingestion jobs (mode=background)
+# ---------------------------------------------------------------------------
+
+def test_upload_background_job_flow(client):
+    response = client.post(
+        "/api/v1/upload",
+        params={"mode": "background"},
+        files={"file": ("bg_job_test.txt", io.BytesIO("Ong ap luc 12 bar. Cong suat 10kW.".encode()), "text/plain")},
+    )
+    assert response.status_code == 202
+    job = response.json()
+    assert job["job_id"]
+    assert job["filename"] == "bg_job_test.txt"
+    assert job["status"] in {"queued", "running", "success"}
+
+    # The TestClient runs BackgroundTasks before returning, so the job is
+    # already terminal here; poll defensively anyway.
+    final = job
+    for _ in range(50):
+        poll = client.get(f"/api/v1/upload/jobs/{job['job_id']}")
+        assert poll.status_code == 200
+        final = poll.json()
+        if final["status"] in {"success", "already_exists", "failed"}:
+            break
+        time.sleep(0.05)
+
+    assert final["status"] == "success"
+    assert final["result"]["filename"] == "bg_job_test.txt"
+    assert final["result"]["chunks_indexed"] >= 1
+    assert final["finished_at"]
+
+
+def test_upload_background_duplicate_finishes_as_already_exists(client):
+    payload = {"file": ("bg_dup_test.txt", io.BytesIO("Van hanh may nen khi 8 bar.".encode()), "text/plain")}
+    first = client.post("/api/v1/upload", params={"mode": "background"}, files=payload)
+    assert first.status_code == 202
+    first_job = client.get(f"/api/v1/upload/jobs/{first.json()['job_id']}").json()
+    assert first_job["status"] == "success"
+
+    second = client.post("/api/v1/upload", params={"mode": "background"}, files={
+        "file": ("bg_dup_test.txt", io.BytesIO("Van hanh may nen khi 8 bar.".encode()), "text/plain")
+    })
+    assert second.status_code == 202
+    second_job = client.get(f"/api/v1/upload/jobs/{second.json()['job_id']}").json()
+    assert second_job["status"] == "already_exists"
+    assert second_job["result"]["status"] == "already_exists"
+
+
+def test_get_unknown_ingestion_job_returns_404(client):
+    response = client.get("/api/v1/upload/jobs/does-not-exist")
+    assert response.status_code == 404
+    assert "not found" in response.json()["detail"].lower()
+
+
+# ---------------------------------------------------------------------------
+# SSE query streaming
+# ---------------------------------------------------------------------------
+
+def _parse_sse(raw: str):
+    """Parse an SSE body into an ordered list of (event, data-dict) tuples."""
+    events = []
+    for block in raw.split("\n\n"):
+        if not block.strip():
+            continue
+        event, data = "message", ""
+        for line in block.split("\n"):
+            if line.startswith("event: "):
+                event = line[len("event: "):]
+            elif line.startswith("data: "):
+                data = line[len("data: "):]
+        events.append((event, json.loads(data) if data else {}))
+    return events
+
+
+def test_query_stream_emits_sse_events(client):
+    with client.stream("POST", "/api/v1/query/stream", json={"question": "Chào bạn", "top_k": 3}) as response:
+        assert response.status_code == 200
+        assert response.headers["content-type"].startswith("text/event-stream")
+        raw = "".join(response.iter_text())
+
+    events = _parse_sse(raw)
+    types = [event for event, _ in events]
+    assert types[0] == "session"
+    assert "answer" in types
+    assert types[-1] == "done"
+
+    answer_event = next(data for event, data in events if event == "answer")
+    qa = answer_event["response"]
+    assert qa["answer"]
+    assert qa["session_id"]
+
+    # The streamed turn is persisted like the sync endpoint.
+    detail = client.get(f"/api/v1/sessions/{qa['session_id']}")
+    assert detail.status_code == 200
+    messages = detail.json()["messages"]
+    assert messages[0]["role"] == "user"
+    assert messages[-1]["role"] == "assistant"
+
+
+def test_query_stream_continues_existing_session(client):
+    first = client.post("/api/v1/query", json={"question": "Chào bạn", "top_k": 3})
+    assert first.status_code == 200
+    session_id = first.json()["session_id"]
+
+    with client.stream(
+        "POST", "/api/v1/query/stream", json={"question": "Bạn là ai?", "session_id": session_id}
+    ) as response:
+        assert response.status_code == 200
+        raw = "".join(response.iter_text())
+
+    events = _parse_sse(raw)
+    session_event = events[0]
+    assert session_event[0] == "session"
+    assert session_event[1]["session_id"] == session_id
+
+    detail = client.get(f"/api/v1/sessions/{session_id}")
+    assert len(detail.json()["messages"]) == 4
 
 

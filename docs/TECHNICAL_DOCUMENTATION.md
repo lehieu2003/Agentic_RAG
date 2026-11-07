@@ -346,8 +346,19 @@ Kiểm tra tình trạng sẵn sàng của hệ thống.
 
 #### `POST /api/v1/upload`
 Nạp một hoặc nhiều tài liệu vào hệ thống.
-- **Request:** `multipart/form-data` (trường `files` hoặc `file`).
-- **Response:**
+- **Request:** `multipart/form-data` (trường `files` hoặc `file`), query param `mode`:
+  - `mode=sync` (mặc định): xử lý xong mới trả về `200` với response bên dưới.
+  - `mode=background`: chỉ kiểm tra định dạng/dedup và lưu file (nhanh), rồi trả
+    **`202 Accepted`** kèm job để poll — OCR/chunking/indexing chạy nền:
+    ```json
+    {
+      "job_id": "dadd90e12f7c463ea3716588c724601b",
+      "filename": "tai_lieu.pdf",
+      "status": "queued",
+      "created_at": "2026-11-07T09:00:00+00:00"
+    }
+    ```
+- **Response (sync):**
   ```json
   {
     "status": "success",
@@ -357,6 +368,10 @@ Nạp một hoặc nhiều tài liệu vào hệ thống.
     "chunks_indexed": 151
   }
   ```
+
+#### `GET /api/v1/upload/jobs/{job_id}`
+Trạng thái của một job nạp tài liệu chạy nền: `queued → running → success | already_exists | failed`.
+Khi kết thúc, `result` chứa `UploadResponse` đầy đủ (hoặc `error` nếu thất bại).
 
 #### `GET /api/v1/files`
 Liệt kê danh sách các tài liệu đã nạp kèm dung lượng.
@@ -373,6 +388,19 @@ Thực hiện truy vấn câu hỏi qua quy trình Agentic RAG.
   }
   ```
   `top_k` (tùy chọn, nâng cao): số đoạn ngữ cảnh đưa vào LLM sau rerank. Bỏ trống để hệ thống dùng `RERANK_TOP_K` (mặc định 5; câu hỏi dài hơn 250 ký tự tự mở rộng lên 12).
+
+#### `POST /api/v1/query/stream`
+Cùng pipeline với `/query`, nhưng trả về **Server-Sent Events** để UI hiển thị tiến trình theo thời gian thực:
+- **Media type:** `text/event-stream` (`Cache-Control: no-cache`, `X-Accel-Buffering: no` để tắt buffer của nginx).
+- **Trình tự event:**
+  | Event | Ý nghĩa |
+  |---|---|
+  | `session` | Phiên hội thoại đã được resolve/tạo (`{"session_id": "..."}`) |
+  | `reasoning` | Một node LangGraph hoàn thành, gửi reasoning step mới (`{"step": "3. hybrid_retrieve: ..."}`) |
+  | `answer` | `QAResponse` đầy đủ (answer, citations, abstained, reasoning_steps, session_id) |
+  | `done` | Kết thúc turn; tin nhắn đã được persist vào SessionStore |
+  | `error` | Lỗi pipeline (`{"detail": "Retrieval failure: ..."}`) |
+- Event `answer` luôn có trước `done`; client nên fallback về `/query` khi endpoint này không khả dụng.
 - **Response Body:**
   ```json
   {

@@ -9,6 +9,7 @@ export interface DocumentsPanelProps {
   onFileUpload: (file: File) => Promise<void>;
   onDeleteFile: (filename: string) => Promise<void>;
   isUploading?: boolean;
+  uploadFilename?: string | null;
   onLocalError: (message: string | null) => void;
   onDismissError?: () => void;
 }
@@ -19,6 +20,7 @@ const DocumentsPanel: React.FC<DocumentsPanelProps> = ({
   onFileUpload,
   onDeleteFile,
   isUploading = false,
+  uploadFilename = null,
   onLocalError,
   onDismissError,
 }) => {
@@ -128,7 +130,7 @@ const DocumentsPanel: React.FC<DocumentsPanelProps> = ({
             <div className="flex flex-col items-center justify-center py-2 space-y-2">
               <Loader2 className="w-6 h-6 text-sky-400 animate-spin" />
               <span className="text-xs font-medium text-sky-300">
-                Đang tải lên và lập chỉ mục...
+                {uploadFilename ? `Đang xử lý "${uploadFilename}"...` : 'Đang tải lên và lập chỉ mục...'}
               </span>
             </div>
           ) : (

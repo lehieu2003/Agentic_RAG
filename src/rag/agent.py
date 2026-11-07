@@ -154,14 +154,13 @@ class AgenticRAG(
 
         return png_bytes
 
-    def answer(
+    def _initial_state(
         self,
         question: str,
-        top_k: int = 5,
-        history: Optional[List[Dict[str, str]]] = None,
-    ) -> QAResponse:
-        """Execute the LangGraph workflow and return a structured QAResponse."""
-        initial_state: AgentState = {
+        top_k: int,
+        history: Optional[List[Dict[str, str]]],
+    ) -> AgentState:
+        return {
             "question": question,
             "clean_question": question,
             "standalone_question": question,
@@ -184,8 +183,49 @@ class AgenticRAG(
             "reasoning_steps": [],
         }
 
-        final_state = self.app.invoke(initial_state)
+    def answer(
+        self,
+        question: str,
+        top_k: int = 5,
+        history: Optional[List[Dict[str, str]]] = None,
+    ) -> QAResponse:
+        """Execute the LangGraph workflow and return a structured QAResponse."""
+        final_state = self.app.invoke(self._initial_state(question, top_k, history))
+        return self._build_qa_response(final_state, question)
 
+    def stream_answer(
+        self,
+        question: str,
+        top_k: int = 5,
+        history: Optional[List[Dict[str, str]]] = None,
+    ):
+        """Run the graph incrementally, yielding progress before the final answer.
+
+        Yields ``("step", text)`` for every new reasoning step as its node
+        completes, then a final ``("answer", QAResponse)``. Behavior matches
+        :meth:`answer`; only the delivery is incremental.
+        """
+        initial_state = self._initial_state(question, top_k, history)
+        final_state: AgentState = dict(initial_state)
+        emitted_steps: set = set()
+
+        for mode, payload in self.app.stream(initial_state, stream_mode=["updates", "custom"]):
+            if mode != "updates":
+                # "custom" is reserved for future token-level events.
+                continue
+            for node_delta in payload.values():
+                if not isinstance(node_delta, dict):
+                    continue
+                final_state.update(node_delta)
+                for step in node_delta.get("reasoning_steps") or []:
+                    if step not in emitted_steps:
+                        emitted_steps.add(step)
+                        yield ("step", step)
+
+        yield ("answer", self._build_qa_response(final_state, question))
+
+    def _build_qa_response(self, final_state: AgentState, question: str) -> QAResponse:
+        """Post-process the final graph state into the public QAResponse."""
         all_queries = list(final_state.get("all_queries", []))
         if not all_queries:
             all_queries = [final_state.get("standalone_question", question)]

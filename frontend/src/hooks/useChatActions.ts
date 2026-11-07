@@ -6,7 +6,7 @@ import type {
   ReasoningStep,
   SessionSummary,
 } from '../types';
-import { askQuestion, getSession, listSessions } from '../api/client';
+import { askQuestion, askQuestionStream, getSession, listSessions } from '../api/client';
 import { parseReasoningStep } from '../utils/reasoning';
 import { clearStoredSessionId, mapSessionMessages, storeSessionId } from '../utils/sessionMessages';
 
@@ -32,6 +32,11 @@ export interface ChatActions {
 /**
  * Chat lifecycle actions: sending questions, retrying, starting a new chat and
  * loading an existing session's history.
+ *
+ * Questions are asked over the SSE stream: a placeholder assistant message
+ * appears as soon as the first reasoning step arrives and is updated live.
+ * When streaming is unavailable (older backend, mocked/proxied environments)
+ * the hook transparently falls back to the synchronous endpoint.
  */
 export function useChatActions({
   currentSessionId,
@@ -60,14 +65,30 @@ export function useChatActions({
       setIsQuerying(true);
       setLastQuestion(trimmed);
 
-      try {
-        const res: QAResponse = await askQuestion(trimmed, currentSessionId);
+      const assistantId = `assistant-${Date.now()}-${Math.random()}`;
+      let receivedStreamEvent = false;
+
+      // Insert the placeholder on first use, then update it in place.
+      const upsertAssistant = (
+        updater: (existing: ChatMessageData | undefined) => ChatMessageData,
+      ) => {
+        setMessages((prev) => {
+          const index = prev.findIndex((m) => m.id === assistantId);
+          if (index >= 0) {
+            const copy = [...prev];
+            copy[index] = updater(prev[index]);
+            return copy;
+          }
+          return [...prev, updater(undefined)];
+        });
+      };
+
+      const applyFinalResponse = (res: QAResponse) => {
         const reasoningSteps: ReasoningStep[] | undefined = Array.isArray(res.reasoning_steps)
           ? res.reasoning_steps.map(parseReasoningStep)
           : undefined;
-
-        const assistantMsg: ChatMessageData = {
-          id: `assistant-${Date.now()}-${Math.random()}`,
+        upsertAssistant(() => ({
+          id: assistantId,
           role: 'assistant',
           content: res.answer,
           citations: res.citations,
@@ -75,30 +96,83 @@ export function useChatActions({
           reasoning_steps: reasoningSteps,
           standalone_question: res.standalone_question,
           timestamp: Date.now(),
-        };
-
-        setMessages((prev) => [...prev, assistantMsg]);
-
+        }));
         if (res.session_id) {
           setCurrentSessionId(res.session_id);
           storeSessionId(res.session_id);
         }
+      };
 
+      const refreshSessions = async () => {
         try {
           const updatedSessions = await listSessions();
           setSessions(updatedSessions);
         } catch {
           // Ignore background refresh errors
         }
+      };
+
+      const appendErrorBubble = (message: string) => {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `error-${Date.now()}-${Math.random()}`,
+            role: 'assistant',
+            content: message,
+            isError: true,
+            timestamp: Date.now(),
+          },
+        ]);
+      };
+
+      try {
+        const res: QAResponse = await askQuestionStream(trimmed, currentSessionId, {
+          onSession: (sessionId) => {
+            receivedStreamEvent = true;
+            setCurrentSessionId(sessionId);
+            storeSessionId(sessionId);
+          },
+          onStep: (step) => {
+            receivedStreamEvent = true;
+            upsertAssistant((existing) => ({
+              id: assistantId,
+              role: 'assistant',
+              content: existing?.content ?? '',
+              citations: existing?.citations,
+              evidence: existing?.evidence,
+              reasoning_steps: [...(existing?.reasoning_steps ?? []), parseReasoningStep(step)],
+              timestamp: existing?.timestamp ?? Date.now(),
+            }));
+          },
+        });
+        applyFinalResponse(res);
+        await refreshSessions();
       } catch (err: any) {
-        const errorMsg: ChatMessageData = {
-          id: `error-${Date.now()}-${Math.random()}`,
-          role: 'assistant',
-          content: `⚠️ Không thể nhận phản hồi từ hệ thống: ${err.message || 'Lỗi kết nối máy chủ'}. Vui lòng thử lại.`,
-          isError: true,
-          timestamp: Date.now(),
-        };
-        setMessages((prev) => [...prev, errorMsg]);
+        if (receivedStreamEvent) {
+          // The stream broke midway: turn the placeholder into an error bubble.
+          upsertAssistant((existing) => ({
+            id: assistantId,
+            role: 'assistant',
+            content: `⚠️ ${err.message || 'Lỗi kết nối máy chủ'}. Vui lòng thử lại.`,
+            reasoning_steps: existing?.reasoning_steps,
+            isError: true,
+            timestamp: Date.now(),
+          }));
+        } else {
+          // Streaming unavailable (older backend / mocked environment):
+          // fall back to the synchronous endpoint.
+          try {
+            const res: QAResponse = await askQuestion(trimmed, currentSessionId);
+            applyFinalResponse(res);
+            await refreshSessions();
+          } catch (fallbackErr: any) {
+            appendErrorBubble(
+              `⚠️ Không thể nhận phản hồi từ hệ thống: ${
+                fallbackErr.message || 'Lỗi kết nối máy chủ'
+              }. Vui lòng thử lại.`,
+            );
+          }
+        }
       } finally {
         setIsQuerying(false);
       }

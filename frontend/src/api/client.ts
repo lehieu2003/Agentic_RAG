@@ -7,6 +7,7 @@ import type {
   FileInfo,
   FileListResponse,
   FileUploadResponse,
+  IngestionJob,
   QAResponse,
   Citation,
   SessionSummary,
@@ -37,6 +38,20 @@ async function handleResponse<T>(res: Response): Promise<T> {
     throw new Error(errorMsg || `Request failed with status ${res.status}`);
   }
   return res.json() as Promise<T>;
+}
+
+/**
+ * Normalize citation field aliases (doc_name/filename, page/page_number).
+ */
+function normalizeQAResponse(data: QAResponse): QAResponse {
+  const citations: Citation[] = (data.citations || []).map((c) => ({
+    ...c,
+    filename: c.filename ?? c.doc_name ?? '',
+    doc_name: c.doc_name ?? c.filename ?? '',
+    page: c.page ?? c.page_number,
+    page_number: c.page_number ?? c.page,
+  }));
+  return { ...data, citations };
 }
 
 /**
@@ -77,6 +92,54 @@ export async function uploadDocument(file: File): Promise<FileUploadResponse> {
 }
 
 /**
+ * Upload a document in the background: returns immediately with a job to poll.
+ */
+export async function uploadDocumentAsync(file: File): Promise<IngestionJob> {
+  const formData = new FormData();
+  formData.append('file', file);
+  const res = await fetch(`${API_BASE}/upload?mode=background`, {
+    method: 'POST',
+    body: formData,
+  });
+  return handleResponse<IngestionJob>(res);
+}
+
+/**
+ * Fetch the current status of one background ingestion job.
+ */
+export async function getUploadJob(jobId: string): Promise<IngestionJob> {
+  const res = await fetch(`${API_BASE}/upload/jobs/${encodeURIComponent(jobId)}`);
+  return handleResponse<IngestionJob>(res);
+}
+
+const UPLOAD_JOB_TERMINAL: IngestionJob['status'][] = ['success', 'already_exists', 'failed'];
+
+/**
+ * Poll an ingestion job until it reaches a terminal state.
+ * Rejects with the job's error detail when processing fails.
+ */
+export async function pollUploadJob(
+  jobId: string,
+  options: { intervalMs?: number; timeoutMs?: number } = {},
+): Promise<IngestionJob> {
+  const intervalMs = options.intervalMs ?? 1000;
+  const timeoutMs = options.timeoutMs ?? 10 * 60 * 1000;
+  const deadline = Date.now() + timeoutMs;
+
+  while (Date.now() < deadline) {
+    const job = await getUploadJob(jobId);
+    if (job.status === 'failed') {
+      throw new Error(job.error || 'Xử lý tài liệu thất bại.');
+    }
+    if (UPLOAD_JOB_TERMINAL.includes(job.status)) {
+      return job;
+    }
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+  }
+  throw new Error('Hết thời gian chờ xử lý tài liệu. Vui lòng thử lại sau.');
+}
+
+/**
  * Delete a document from vector index and physical disk.
  */
 export async function deleteDocument(
@@ -107,18 +170,95 @@ export async function askQuestion(
   });
 
   const data = await handleResponse<QAResponse>(res);
-  const citations: Citation[] = (data.citations || []).map((c) => ({
-    ...c,
-    filename: c.filename ?? c.doc_name ?? '',
-    doc_name: c.doc_name ?? c.filename ?? '',
-    page: c.page ?? c.page_number,
-    page_number: c.page_number ?? c.page,
-  }));
+  return normalizeQAResponse(data);
+}
 
-  return {
-    ...data,
-    citations,
+export interface AskStreamHandlers {
+  /** Fired once the conversation session is resolved (before any step). */
+  onSession?: (sessionId: string) => void;
+  /** Fired per reasoning step as pipeline nodes complete. */
+  onStep?: (step: string) => void;
+}
+
+/**
+ * Query the assistant over the SSE endpoint, reporting progress via handlers.
+ * Resolves with the same normalized QAResponse as {@link askQuestion}.
+ * Throws when the stream is unavailable or the server reports an error.
+ */
+export async function askQuestionStream(
+  question: string,
+  sessionId: string | null | undefined,
+  handlers: AskStreamHandlers = {},
+): Promise<QAResponse> {
+  const res = await fetch(`${API_BASE}/query/stream`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      question,
+      session_id: sessionId || undefined,
+    }),
+  });
+
+  const contentType = res.headers?.get?.('content-type') || '';
+  if (!res.ok || !contentType.includes('text/event-stream') || !res.body) {
+    throw new Error(`Streaming unavailable (status ${res.status})`);
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let finalResponse: QAResponse | null = null;
+
+  const handleBlock = (block: string): void => {
+    let event = 'message';
+    let data = '';
+    for (const line of block.split('\n')) {
+      if (line.startsWith('event: ')) {
+        event = line.slice('event: '.length);
+      } else if (line.startsWith('data: ')) {
+        data = line.slice('data: '.length);
+      }
+    }
+    if (!data) return;
+    const payload = JSON.parse(data) as any;
+    switch (event) {
+      case 'session':
+        handlers.onSession?.(payload.session_id);
+        break;
+      case 'reasoning':
+        handlers.onStep?.(payload.step);
+        break;
+      case 'answer':
+        finalResponse = normalizeQAResponse(payload.response as QAResponse);
+        break;
+      case 'error':
+        throw new Error(payload.detail || 'Lỗi xử lý câu hỏi.');
+      default:
+        break;
+    }
   };
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    let separator = buffer.indexOf('\n\n');
+    while (separator >= 0) {
+      handleBlock(buffer.slice(0, separator));
+      buffer = buffer.slice(separator + 2);
+      separator = buffer.indexOf('\n\n');
+    }
+  }
+  if (buffer.trim()) {
+    handleBlock(buffer);
+  }
+
+  if (!finalResponse) {
+    throw new Error('Stream kết thúc nhưng không nhận được câu trả lời.');
+  }
+  return finalResponse;
 }
 
 /**

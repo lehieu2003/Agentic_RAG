@@ -20,6 +20,7 @@ export interface SidebarProps {
   onDeleteAllSessions?: () => Promise<void> | void;
   onDeleteSessions?: (sessionIds: string[]) => Promise<void> | void;
   isUploading?: boolean;
+  uploadFilename?: string | null;
   errorMessage?: string | null;
   onDismissError?: () => void;
 }
@@ -38,6 +39,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onDeleteAllSessions,
   onDeleteSessions,
   isUploading = false,
+  uploadFilename = null,
   errorMessage,
   onDismissError,
 }) => {
@@ -103,6 +105,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           onFileUpload={onFileUpload}
           onDeleteFile={onDeleteFile}
           isUploading={isUploading}
+          uploadFilename={uploadFilename}
           onLocalError={setLocalError}
           onDismissError={onDismissError}
         />

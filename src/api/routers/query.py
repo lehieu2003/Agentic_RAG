@@ -1,8 +1,15 @@
-"""Question-answering route backed by the Agentic RAG engine."""
+"""Question-answering routes backed by the Agentic RAG engine.
 
-from typing import Annotated
+``/query`` returns the full answer in one JSON response; ``/query/stream``
+sends the same turn as Server-Sent Events (session → reasoning steps →
+answer → done) so the UI can show progress while the pipeline runs.
+"""
+
+import json
+from typing import Annotated, AsyncIterator
 
 from fastapi import APIRouter, Depends
+from fastapi.responses import StreamingResponse
 
 from src.api.dependencies import get_chat_service
 from src.application.chat_service import ChatService
@@ -32,4 +39,56 @@ def query_assistant(
         question=qa_request.question,
         top_k=qa_request.top_k,
         session_id=qa_request.session_id,
+    )
+
+
+_SSE_EVENT_NAMES = {
+    "session": "session",
+    "step": "reasoning",
+    "answer": "answer",
+    "error": "error",
+    "done": "done",
+}
+
+
+def _format_sse(event: dict) -> str:
+    """Render one service event as an SSE frame."""
+    event_type = _SSE_EVENT_NAMES.get(event.get("type", ""), "message")
+    payload = {k: v for k, v in event.items() if k != "type"}
+    if event_type == "answer":
+        payload = {"response": payload["response"].model_dump(mode="json")}
+    return f"event: {event_type}\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
+
+
+@router.post(
+    "/query/stream",
+    tags=["Hỏi đáp tài liệu (Q&A)"],
+    summary="Đặt câu hỏi và nhận câu trả lời dạng stream (Server-Sent Events)",
+)
+def query_assistant_stream(
+    qa_request: QARequest,
+    chat_service: Annotated[ChatService, Depends(get_chat_service)],
+) -> StreamingResponse:
+    """Cùng pipeline với `/query`, nhưng gửi từng bước suy luận ngay khi có:
+    `session` → các event `reasoning` (mỗi node LangGraph hoàn thành) →
+    `answer` (QAResponse đầy đủ) → `done`. Lỗi trả về event `error`.
+    """
+    events = chat_service.answer_stream(
+        question=qa_request.question,
+        top_k=qa_request.top_k,
+        session_id=qa_request.session_id,
+    )
+
+    async def sse_response() -> AsyncIterator[str]:
+        for event in events:
+            yield _format_sse(event)
+
+    return StreamingResponse(
+        sse_response(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",  # disable nginx response buffering
+        },
     )

@@ -7,29 +7,39 @@ building live here; the ingestion pipeline lives in
 
 import mimetypes
 from pathlib import Path
-from typing import Annotated, Any, Dict, List
+from typing import Annotated, Any, Dict, List, Literal
 import unicodedata
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
-from fastapi.responses import FileResponse
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Query, UploadFile
+from fastapi.responses import FileResponse, JSONResponse
 
-from src.api.dependencies import get_ingestion_service
+from src.api.dependencies import get_ingestion_job_store, get_ingestion_service
+from src.application.ingestion_jobs import IngestionJobStore
 from src.application.ingestion_service import IngestionService
-from src.models import FileSummary, UploadResponse
+from src.models import FileSummary, IngestionJobResponse, UploadResponse
 
 router = APIRouter()
 
 
 @router.post(
     "/upload",
-    response_model=UploadResponse,
+    response_model=None,
     tags=["Tải lên tài liệu (Ingestion)"],
-    summary="Tải lên tài liệu kỹ thuật để bóc tách text/OCR và đánh chỉ mục vector"
+    summary="Tải lên tài liệu kỹ thuật để bóc tách text/OCR và đánh chỉ mục vector",
+    responses={200: {"model": UploadResponse}, 202: {"model": IngestionJobResponse}},
 )
 async def upload_document(
     file: Annotated[UploadFile, File(...)],
     ingestion: Annotated[IngestionService, Depends(get_ingestion_service)],
-) -> UploadResponse:
+    job_store: Annotated[IngestionJobStore, Depends(get_ingestion_job_store)],
+    background_tasks: BackgroundTasks,
+    mode: Annotated[Literal["sync", "background"], Query(
+        description=(
+            "`sync` (mặc định) xử lý xong mới trả về; `background` trả 202 kèm "
+            "job_id ngay để poll tại /upload/jobs/{job_id}."
+        )
+    )] = "sync",
+) -> Any:
     """Tải lên tài liệu kỹ thuật (PDF, DOCX, TXT, PNG, JPG, JPEG). Hệ thống sẽ:
     1. Kiểm tra định dạng hỗ trợ.
     2. Chống nạp trùng lặp dựa trên tên file trong thư mục lưu trữ.
@@ -37,8 +47,33 @@ async def upload_document(
     4. Trích xuất text kỹ thuật số hoặc OCR tuỳ định dạng.
     5. Phân đoạn ngữ nghĩa (chunking) bảo toàn số trang.
     6. Sinh embedding và lưu trữ vào Qdrant.
+
+    Với `mode=background`, các bước 4-6 chạy nền và response là `202` +
+    thông tin job; poll `GET /upload/jobs/{job_id}` tới khi có trạng thái kết thúc.
     """
+    if mode == "background":
+        job = ingestion.start_ingestion_job(filename=file.filename, fileobj=file.file, job_store=job_store)
+        if job.status == "queued":
+            background_tasks.add_task(ingestion.run_ingestion_job, job.job_id, job_store)
+        return JSONResponse(status_code=202, content=job.model_dump(mode="json"))
     return ingestion.ingest(filename=file.filename, fileobj=file.file)
+
+
+@router.get(
+    "/upload/jobs/{job_id}",
+    response_model=IngestionJobResponse,
+    tags=["Tải lên tài liệu (Ingestion)"],
+    summary="Trạng thái của một job nạp tài liệu chạy nền"
+)
+def get_ingestion_job(
+    job_id: str,
+    job_store: Annotated[IngestionJobStore, Depends(get_ingestion_job_store)],
+) -> IngestionJobResponse:
+    """Poll trạng thái job: `queued` → `running` → `success`/`already_exists`/`failed`."""
+    job = job_store.get(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return job
 
 @router.get(
     "/files",

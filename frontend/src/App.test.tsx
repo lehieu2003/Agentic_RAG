@@ -28,6 +28,28 @@ describe('App Split-Screen Workspace Integration', () => {
           json: async () => ({ files: [{ filename: 'tài liệu máy bơm.pdf', size: 1048576 }] }),
         });
       }
+      if (url.includes('/api/v1/upload/jobs/')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            job_id: 'job-1',
+            filename: 'new_doc.pdf',
+            status: 'success',
+            result: { filename: 'new_doc.pdf', status: 'success', chunks_indexed: 5 },
+          }),
+        });
+      }
+      if (url.includes('/api/v1/upload') && url.includes('mode=background')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            job_id: 'job-1',
+            filename: 'new_doc.pdf',
+            status: 'queued',
+            created_at: new Date().toISOString(),
+          }),
+        });
+      }
       if (url.includes('/api/v1/upload')) {
         return Promise.resolve({
           ok: true,
@@ -185,6 +207,11 @@ describe('App Split-Screen Workspace Integration', () => {
           ok: true,
           json: async () => ({ files: [] }),
         });
+      }
+      if (url.includes('/api/v1/query/stream')) {
+        // The SSE endpoint is unavailable in this scenario: the client falls
+        // back to the synchronous query endpoint counted below.
+        return Promise.resolve({ ok: false, status: 404, statusText: 'Not Found' });
       }
       if (url.includes('/api/v1/query')) {
         queryCallCount++;

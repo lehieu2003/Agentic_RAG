@@ -9,6 +9,7 @@ into ``src.config.settings``, themselves.
 from fastapi import HTTPException, Request
 
 from src.application.chat_service import ChatService
+from src.application.ingestion_jobs import IngestionJobStore
 from src.application.ingestion_service import IngestionService
 from src.application.session_service import SessionService
 from src.config import settings
@@ -88,6 +89,15 @@ def get_ingestion_service(request: Request) -> IngestionService:
         ocr_engine=getattr(request.app.state, "ocr_engine", None),
         embedding_model=getattr(request.app.state, "embedding_model", None),
     )
+
+
+def get_ingestion_job_store(request: Request) -> IngestionJobStore:
+    """Return the app-level ingestion job registry, creating it on first use."""
+    job_store = getattr(request.app.state, "ingestion_job_store", None)
+    if job_store is None:
+        job_store = IngestionJobStore()
+        request.app.state.ingestion_job_store = job_store
+    return job_store
 
 
 def get_session_service(request: Request) -> SessionService:

@@ -1,5 +1,6 @@
 """Pydantic data models for Document Q&A Assistant."""
 
+from enum import Enum
 from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 
@@ -14,6 +15,29 @@ class UploadResponse(BaseModel):
     chunks_indexed: int
     status: str = "success"
     message: Optional[str] = None
+
+
+class IngestionJobStatus(str, Enum):
+    """Lifecycle of a background ingestion job."""
+
+    QUEUED = "queued"
+    RUNNING = "running"
+    SUCCESS = "success"
+    ALREADY_EXISTS = "already_exists"
+    FAILED = "failed"
+
+
+class IngestionJobResponse(BaseModel):
+    """Status of one background ingestion job (polled by the client)."""
+
+    job_id: str
+    filename: str
+    status: IngestionJobStatus
+    created_at: str
+    started_at: Optional[str] = None
+    finished_at: Optional[str] = None
+    result: Optional[UploadResponse] = None
+    error: Optional[str] = None
 
 
 class FileSummary(BaseModel):

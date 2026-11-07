@@ -22,6 +22,7 @@ export interface Workspace {
   messages: ChatMessageData[];
   isQuerying: boolean;
   isUploading: boolean;
+  uploadFilename: string | null;
   sidebarError: string | null;
   setSidebarError: Dispatch<SetStateAction<string | null>>;
   handleFileUpload: (file: File) => Promise<void>;
@@ -52,6 +53,7 @@ export function useWorkspace(): Workspace {
   const [messages, setMessages] = useState<ChatMessageData[]>([]);
   const [isQuerying, setIsQuerying] = useState<boolean>(false);
   const [isUploading, setIsUploading] = useState<boolean>(false);
+  const [uploadFilename, setUploadFilename] = useState<string | null>(null);
   const [sidebarError, setSidebarError] = useState<string | null>(null);
   const [lastQuestion, setLastQuestion] = useState<string>('');
 
@@ -92,6 +94,7 @@ export function useWorkspace(): Workspace {
     activeDocument,
     setActiveDocument,
     setIsUploading,
+    setUploadFilename,
     setSidebarError,
     refreshState,
   });
@@ -130,6 +133,7 @@ export function useWorkspace(): Workspace {
     messages,
     isQuerying,
     isUploading,
+    uploadFilename,
     sidebarError,
     setSidebarError,
     handleFileUpload,
