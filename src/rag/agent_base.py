@@ -5,6 +5,7 @@ the chit-chat, query-processing, and graph-node mixins can share them.
 """
 
 import logging
+import time
 import unicodedata
 
 logger = logging.getLogger(__name__)
@@ -20,7 +21,14 @@ class AgentBaseMixin:
         return "".join(c for c in nfkd if not unicodedata.combining(c))
 
     def _call_llm(self, prompt: str) -> str:
-        """Execute LLM generation with automatic model fallback for high availability."""
+        """Execute LLM generation, logging the round-trip duration."""
+        start = time.perf_counter()
+        result = self._call_llm_impl(prompt)
+        logger.info("llm call (%s) took %.2fs", self.provider, time.perf_counter() - start)
+        return result
+
+    def _call_llm_impl(self, prompt: str) -> str:
+        """Provider dispatch with automatic model fallback for high availability."""
         if self.llm_client is None:
             return ""
         if self.provider == "gemini":

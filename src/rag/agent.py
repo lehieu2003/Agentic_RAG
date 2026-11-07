@@ -7,7 +7,9 @@ mixins under ``src/rag/nodes`` and ``src/rag/{chitchat,query_processing,
 agent_base}``; this module wires them together.
 """
 
-from typing import Any, Dict, List, Optional
+import logging
+import time
+from typing import Any, Callable, Dict, List, Optional
 
 from langgraph.graph import StateGraph, START, END
 
@@ -23,6 +25,8 @@ from src.rag.query_processing import QueryProcessingMixin
 from src.rag.state import AgentState
 from src.retrieval.base import BaseRetriever
 from src.retrieval.reranker import CrossEncoderReranker
+
+logger = logging.getLogger(__name__)
 
 
 class AgenticRAG(
@@ -81,16 +85,16 @@ class AgenticRAG(
         """Construct and compile the 9+1 numbered node LangGraph StateGraph workflow."""
         workflow = StateGraph(AgentState)
 
-        workflow.add_node("0_contextualize_query", self._node_contextualize_query)
-        workflow.add_node("1_router", self._node_router)
-        workflow.add_node("2_expand_query", self._node_expand_query)
-        workflow.add_node("3_hybrid_retrieve", self._node_hybrid_retrieve)
-        workflow.add_node("4_rerank", self._node_rerank)
-        workflow.add_node("5_grade_relevance", self._node_grade_relevance)
-        workflow.add_node("6_rewrite_query", self._node_rewrite_query)
-        workflow.add_node("7_generate", self._node_generate)
-        workflow.add_node("8_validate_citations", self._node_validate_citations)
-        workflow.add_node("9_abstain", self._node_abstain)
+        workflow.add_node("0_contextualize_query", self._timed_node("0_contextualize_query", self._node_contextualize_query))
+        workflow.add_node("1_router", self._timed_node("1_router", self._node_router))
+        workflow.add_node("2_expand_query", self._timed_node("2_expand_query", self._node_expand_query))
+        workflow.add_node("3_hybrid_retrieve", self._timed_node("3_hybrid_retrieve", self._node_hybrid_retrieve))
+        workflow.add_node("4_rerank", self._timed_node("4_rerank", self._node_rerank))
+        workflow.add_node("5_grade_relevance", self._timed_node("5_grade_relevance", self._node_grade_relevance))
+        workflow.add_node("6_rewrite_query", self._timed_node("6_rewrite_query", self._node_rewrite_query))
+        workflow.add_node("7_generate", self._timed_node("7_generate", self._node_generate))
+        workflow.add_node("8_validate_citations", self._timed_node("8_validate_citations", self._node_validate_citations))
+        workflow.add_node("9_abstain", self._timed_node("9_abstain", self._node_abstain))
 
         workflow.add_edge(START, "0_contextualize_query")
         workflow.add_edge("0_contextualize_query", "1_router")
@@ -125,6 +129,18 @@ class AgenticRAG(
         workflow.add_edge("9_abstain", END)
 
         return workflow.compile()
+
+    @staticmethod
+    def _timed_node(node_name: str, fn: Callable[[AgentState], Dict[str, Any]]):
+        """Wrap a graph node so its execution time is logged on every run."""
+
+        def _wrapper(state: AgentState) -> Dict[str, Any]:
+            start = time.perf_counter()
+            result = fn(state)
+            logger.info("node %s finished in %.2fs", node_name, time.perf_counter() - start)
+            return result
+
+        return _wrapper
 
     def draw_png(self, output_path: Optional[str] = "docs/langgraph_workflow.png") -> bytes:
         """Export the compiled LangGraph StateGraph as a PNG diagram with model label gemini-3.5-flash-lite."""

@@ -1,6 +1,7 @@
 """FastAPI application entrypoint with lifespan dependency wiring."""
 
 import logging
+import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import List
@@ -26,6 +27,13 @@ from src.retrieval.reranker import CrossEncoderReranker
 from src.storage.session_store import SessionStore
 from src.vector_store.embedding import EmbeddingModel
 from src.vector_store.qdrant_store import QdrantVectorStore
+
+# Root logging config so app-level INFO logs (node/LLM latency, warnings)
+# actually reach the container output. Override with LOG_LEVEL, e.g. DEBUG.
+logging.basicConfig(
+    level=os.getenv("LOG_LEVEL", "INFO").upper(),
+    format="%(asctime)s %(levelname)s %(name)s %(message)s",
+)
 
 logger = logging.getLogger(__name__)
 
